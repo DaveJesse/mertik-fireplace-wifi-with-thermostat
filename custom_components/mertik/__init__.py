@@ -10,10 +10,13 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.typing import ConfigType
 
 from .const import DOMAIN
+from homeassistant.helpers import config_validation as cv, device_registry as dr
 from .coordinator import MertikDataCoordinator
 from .mertik import Mertik
 
 _LOGGER = logging.getLogger(__name__)
+
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 PLATFORMS = ["climate", "light", "number", "select", "sensor", "switch"]
 
