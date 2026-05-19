@@ -14,11 +14,11 @@
       "heating_mode": {
         "default": "mdi:fire-off",
         "state": {
-          "Standby": "mdi:fire-off",
-          "Low Heat": "mdi:campfire",
-          "Medium Heat": "mdi:fire",
-          "Full Heat": "mdi:fire-circle",
-          "Thermostatic": "mdi:thermostat"
+          "standby": "mdi:fire-off",
+          "low_heat": "mdi:campfire",
+          "medium_heat": "mdi:fire",
+          "full_heat": "mdi:fire-circle",
+          "thermostatic": "mdi:thermostat"
         }
       }
     }
