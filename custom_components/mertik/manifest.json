@@ -4,8 +4,8 @@
   "codeowners": ["@DaveJesse"],
   "config_flow": true,
   "dependencies": [],
-  "documentation": "https://github.com/DaveJesse/mertik-fireplace-wifi-ha",
+  "documentation": "https://github.com/DaveJesse/mertik-fireplace-wifi-with-thermostat",
   "iot_class": "local_polling",
-  "issue_tracker": "https://github.com/DaveJesse/mertik-fireplace-wifi-ha/issues",
+  "issue_tracker": "https://github.com/DaveJesse/mertik-fireplace-wifi-with-thermostat/issues",
   "version": "2.4.0"
 }
