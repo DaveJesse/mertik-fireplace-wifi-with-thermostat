@@ -2,19 +2,119 @@
   "config": {
     "step": {
       "user": {
+        "title": "Mertik Maxitrol gaspejs",
+        "description": "Indtast IP-adressen på din myfire WiFi-boks og tærsklerne for termostatstyring.",
         "data": {
-          "name": "Navn på gaspejs",
-          "host": "IP addresse"
-        },
-        "description": "Opsætning",
-        "title": "Enheder"
+          "host": "IP-adresse på WiFi-boksen",
+          "low_threshold": "Tærskel for lav varme (grader C under indstillet temperatur)",
+          "high_threshold": "Tærskel for fuld varme (grader C under indstillet temperatur, skal være større end Lav)"
+        }
+      },
+      "reconfigure": {
+        "title": "Omkonfigurer Mertik Maxitrol",
+        "description": "Opdater IP-adressen på pejsens WiFi-boks.",
+        "data": {
+          "host": "IP-adresse på WiFi-boksen",
+          "low_threshold": "Tærskel for lav varme (grader C under indstillet temperatur)",
+          "high_threshold": "Tærskel for fuld varme (grader C under indstillet temperatur, skal være større end Lav)"
+        }
       }
     },
     "error": {
-      "cannot_connect": "Kan ikke oprette forbindelse til pejsen. Kontrollér IP-adressen, og sørg for, at enheden er tændt."
+      "cannot_connect": "Kan ikke oprette forbindelse til pejsens WiFi-boks. Kontrollér IP-adressen, og sørg for, at enheden er tændt og forbundet til dit netværk.",
+      "invalid_thresholds": "Tærsklerne skal være positive tal, og tærsklen for Lav skal være mindre end tærsklen for Fuld."
     },
     "abort": {
-      "already_configured": "Denne pejs er allerede konfigureret."
+      "already_configured": "Denne pejs er allerede konfigureret.",
+      "reconfigure_successful": "Pejsens konfiguration er opdateret."
+    }
+  },
+  "issues": {
+    "cannot_connect": {
+      "title": "Kan ikke oprette forbindelse til Mertik Maxitrol-pejsen",
+      "description": "Home Assistant kan ikke nå pejsens WiFi-boks på {host}. Kontrollér, at enheden er tændt og forbundet til dit netværk. Hvis IP-adressen er ændret, kan du bruge **Omkonfigurer** til at opdatere den."
+    }
+  },
+  "exceptions": {
+    "cannot_connect": {
+      "message": "Kan ikke oprette forbindelse til pejsen. Kontrollér IP-adressen, og sørg for, at enheden er tændt og forbundet til dit netværk."
+    },
+    "update_failed": {
+      "message": "Fejl i kommunikationen med pejsen."
+    }
+  },
+  "entity": {
+    "switch": {
+      "aux": {
+        "name": "Aux"
+      }
+    },
+    "climate": {
+      "thermostat": {
+        "name": "Termostat"
+      }
+    },
+    "select": {
+      "heating_mode": {
+        "name": "Varmetilstand"
+      }
+    },
+    "number": {
+      "flame_height": {
+        "name": "Flammehøjde"
+      }
+    },
+    "sensor": {
+      "handset_temperature": {
+        "name": "Fjernbetjeningens temperatur"
+      },
+      "fault_code": {
+        "name": "Fejlkode",
+        "state": {
+          "none": "Ingen fejl",
+          "f02": "F02 – Motor- / mikrokontaktfejl",
+          "f03": "F03 – Fejl i termoelementets ledninger eller TÆND/SLUK-kontakten",
+          "f04": "F04 – Fejl i tændingssekvensen (vent 1 min, prøv igen)",
+          "f06": "F06 – 3 mislykkede tændingsforsøg",
+          "f10": "F10 – Hovedbrænderen tænder ikke (2. termoelement)",
+          "f12": "F12 – Modtageren er overophedet (60 °C)",
+          "f13": "F13 – Modtageren er overophedet (80 °C)",
+          "f14": "F14 – Modtagerens hardware er ikke kompatibel",
+          "f15": "F15 – 2. termoelement er ikke tilsluttet",
+          "f16": "F16 – Fjernbetjeningen er uden for rækkevidde",
+          "f17": "F17 – Fejl i forsyningsspændingen",
+          "f19": "F19 – Vågeblusset slukker / utilstrækkelig termospænding",
+          "f26": "F26 – Modtageren er overophedet 60 °C (flammehøjde blokeret)",
+          "f28": "F28 – Timeout for vågeblus efter behov",
+          "f31": "F31 – Fejl i modtageren",
+          "f41": "F41 – Fejl i WiFi-forbindelsen",
+          "f43": "F43 – Ingen modtager tilsluttet",
+          "f44": "F44 – Fjernbetjeningen er uden for rækkevidde eller har lavt batteri"
+        }
+      }
+    },
+    "light": {
+      "light": {
+        "name": "Lys"
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Indstillinger for pejsen",
+        "description": "Vælg den temperatursensor, der bruges til termostatstyring, og juster varmetærsklerne.",
+        "data": {
+          "temperature_sensor": "Temperatursensor (lad stå tom for at bruge pejsens fjernbetjening)",
+          "low_threshold": "Tærskel for lav varme (grader C under indstillet temperatur)",
+          "high_threshold": "Tærskel for fuld varme (grader C under indstillet temperatur, skal være større end Lav)",
+          "temperature_step": "Trin for indstillet temperatur (grader C)"
+        }
+      }
+    },
+    "error": {
+      "invalid_thresholds": "Tærsklerne skal være positive tal, og tærsklen for Lav skal være mindre end tærsklen for Fuld.",
+      "invalid_temp_step": "Trinnet for indstillet temperatur skal være et positivt tal."
     }
   }
 }
