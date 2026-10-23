@@ -246,8 +246,12 @@ class Mertik:
         baseline value (0x8F = step 2) regardless of set_flame_height()
         commands. Physical flame changes are confirmed by device beep and
         ACK responses. We track the requested value locally.
+
+        Reported as 0 whenever the device says the flame is out (same gating
+        as is_aux_on), so a stale commanded value is never shown for an
+        extinguished fire.
         """
-        return self.flameHeight
+        return self.flameHeight if self.flame_on else 0
 
     def set_flame_height(self, flame_height: int) -> None:
         """Set flame to step 1-13. Updates local tracker on ACK."""
