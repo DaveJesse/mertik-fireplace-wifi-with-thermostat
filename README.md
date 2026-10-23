@@ -57,7 +57,7 @@ ITALKERO, Signi, SAFIRE, attika, Ortal, and Fire Connects.
 |--------|------|-------|
 | Fireplace | Switch | Main on/off |
 | Heating Mode | Select | Standby / Full Heat / Medium Heat / Low Heat / Thermostatic |
-| Thermostat | Climate | Target temperature, measured room temperature and thermostatic control |
+| Thermostat | Climate | The whole control panel: Heat/Off, heating mode presets (Low, Medium, Full, Thermostatic), target and measured room temperature, and heating/idle status |
 | Light | Light | Dimmable; stays on when fire is turned off |
 | Aux Burner | Binary sensor | Read-only: shows whether the rear / second burner is lit (set by the heating mode) |
 | Flame Height | Sensor | Read-only: current flame step, 0 when the fire is off (set by the heating mode) |
@@ -71,6 +71,58 @@ removed automatically on upgrade.
 Each fireplace you add has its own name, temperature sensor, thresholds and
 default target temperature, so two fires in one house can use different room
 sensors.
+
+The Heating Mode select and the Thermostat's presets are the same setting:
+change either and the other follows.
+
+---
+
+## Dashboard card
+
+The Thermostat entity is a complete control panel for Home Assistant's
+standard **Thermostat** card. Add the card, pick your fireplace's Thermostat
+entity, and add the **HVAC modes** and **Preset modes** features, or paste
+this YAML (**Edit dashboard → Add card → Manual**), replacing `fireplace` with
+your entity names:
+
+```yaml
+type: vertical-stack
+cards:
+  - type: thermostat
+    entity: climate.fireplace_thermostat
+    features:
+      - type: climate-hvac-modes
+        hvac_modes:
+          - heat
+          - "off"
+      - type: climate-preset-modes
+        style: icons
+        preset_modes:
+          - low_heat
+          - medium_heat
+          - full_heat
+          - thermostatic
+  - type: glance
+    entities:
+      - entity: binary_sensor.fireplace_aux_burner
+        tap_action:
+          action: none
+      - entity: sensor.fireplace_flame_height
+        tap_action:
+          action: none
+      - entity: sensor.fireplace_fault_code
+        tap_action:
+          action: none
+  - type: tile
+    entity: light.fireplace_light
+    icon_tap_action:
+      action: toggle
+    features:
+      - type: light-brightness
+```
+
+The target temperature is used in Thermostatic mode; in the other modes it
+is kept for the next time Thermostatic is selected.
 
 ---
 

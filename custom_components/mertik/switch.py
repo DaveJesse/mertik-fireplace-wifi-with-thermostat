@@ -7,7 +7,6 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import MertikConfigEntry
-from .const import MODE_THERMO
 from .coordinator import MertikDataCoordinator
 from .entity import MertikEntity
 
@@ -43,19 +42,10 @@ class MertikOnOffSwitchEntity(MertikEntity, SwitchEntity):
         return bool(self._dataservice.is_on)
 
     async def async_turn_on(self, **kwargs: Any) -> None:
-        mode = self._dataservice.heating_mode
-        if mode == MODE_THERMO:
-            await self.hass.async_add_executor_job(self._dataservice.arm_thermostatic)
-        else:
-            # mark_optimistic_on first so apply_heating_mode's is_on guard passes.
-            self._dataservice.mark_optimistic_on()
-            await self.hass.async_add_executor_job(
-                self._dataservice.apply_heating_mode, mode
-            )
+        await self.hass.async_add_executor_job(self._dataservice.turn_on)
         self._dataservice.async_set_updated_data(None)
 
     async def async_turn_off(self, **kwargs: Any) -> None:
-        await self.hass.async_add_executor_job(self._dataservice.guard_flame_off)
-        self._dataservice.mark_optimistic_off()
+        await self.hass.async_add_executor_job(self._dataservice.turn_off)
         self._dataservice.async_set_updated_data(None)
 

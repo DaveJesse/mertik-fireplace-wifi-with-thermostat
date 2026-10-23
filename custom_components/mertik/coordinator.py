@@ -94,6 +94,43 @@ class MertikDataCoordinator(DataUpdateCoordinator[None]):
     def set_heating_mode(self, mode: str) -> None:
         self._heating_mode = mode
 
+    def turn_on(self) -> None:
+        """Switch the fire on in the current heating mode (blocking I/O).
+
+        Thermostatic: light the pilot and let the thermostat decide whether to
+        ignite the burner. Any other mode: ignite and apply that mode.
+        """
+        from .const import MODE_THERMO
+
+        mode = self._heating_mode
+        if mode == MODE_THERMO:
+            self.arm_thermostatic()
+        else:
+            # mark_optimistic_on first so apply_heating_mode's is_on guard passes.
+            self.mark_optimistic_on()
+            self.apply_heating_mode(mode)
+
+    def turn_off(self) -> None:
+        """Switch the fire fully off, pilot included (blocking I/O)."""
+        self.guard_flame_off()
+        self.mark_optimistic_off()
+
+    def select_heating_mode(self, mode: str) -> None:
+        """Choose a heating mode and apply it to the fire (blocking I/O).
+
+        Standby: pilot only. Thermostatic: nothing is sent here; the thermostat
+        drives the fire on its next update. Other modes are applied directly
+        (if the fire is off they are remembered for the next switch-on).
+        """
+        from .const import MODE_STANDBY, MODE_THERMO
+
+        self._heating_mode = mode
+        if mode == MODE_STANDBY:
+            self.standby()
+            self.mark_optimistic_off()
+        elif mode != MODE_THERMO:
+            self.apply_heating_mode(mode)
+
     def ignite_fireplace(self) -> None:
         self.mertik.ignite_fireplace()
 

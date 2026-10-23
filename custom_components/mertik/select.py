@@ -41,24 +41,25 @@ class MertikHeatingModeSelect(MertikEntity, SelectEntity, RestoreEntity):
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
         last_state = await self.async_get_last_state()
-        if last_state is not None and last_state.state in HEATING_MODES:
+        if (
+            last_state is not None
+            and last_state.state in HEATING_MODES
+            and self._dataservice.heating_mode is None
+        ):
             self._current_mode = last_state.state
             self._dataservice.set_heating_mode(last_state.state)
 
     @property
     def current_option(self) -> str:
-        return self._current_mode
+        # The mode is shared with the thermostat's preset, so read it from the
+        # coordinator; either control can change it.
+        return self._dataservice.heating_mode or self._current_mode
 
     async def async_select_option(self, option: str) -> None:
         self._current_mode = option
-        self._dataservice.set_heating_mode(option)
-        if option == "Standby":
-            await self.hass.async_add_executor_job(self._dataservice.standby)
-            self._dataservice.mark_optimistic_off()
-        elif option != "Thermostatic":
-            await self.hass.async_add_executor_job(
-                self._dataservice.apply_heating_mode, option
-            )
+        await self.hass.async_add_executor_job(
+            self._dataservice.select_heating_mode, option
+        )
         # Thermostatic: climate entity drives hardware on next poll
         self.async_write_ha_state()
         self._dataservice.async_set_updated_data(None)

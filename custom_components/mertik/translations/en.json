@@ -50,7 +50,17 @@
   "entity": {
     "climate": {
       "thermostat": {
-        "name": "Thermostat"
+        "name": "Thermostat",
+        "state_attributes": {
+          "preset_mode": {
+            "state": {
+              "low_heat": "Low heat",
+              "medium_heat": "Medium heat",
+              "full_heat": "Full heat",
+              "thermostatic": "Thermostatic"
+            }
+          }
+        }
       }
     },
     "select": {

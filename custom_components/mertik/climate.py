@@ -6,6 +6,7 @@ from typing import Any, TypeVar
 from homeassistant.components.climate import (
     ClimateEntity,
     ClimateEntityFeature,
+    HVACAction,
     HVACMode,
 )
 from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
@@ -16,7 +17,6 @@ from homeassistant.helpers.restore_state import RestoreEntity
 from . import MertikConfigEntry
 from .coordinator import MertikDataCoordinator
 from .const import (
-    DOMAIN,
     CONF_LOW_THRESHOLD,
     CONF_HIGH_THRESHOLD,
     CONF_TEMP_SENSOR,
@@ -34,6 +34,8 @@ from .const import (
     MODE_MEDIUM,
     MODE_LOW,
     MODE_THERMO,
+    MODE_TO_PRESET,
+    PRESET_TO_MODE,
 )
 from .entity import MertikEntity
 
@@ -62,11 +64,13 @@ async def async_setup_entry(
 
 
 class MertikClimateEntity(MertikEntity, ClimateEntity, RestoreEntity):
-    """Thermostat setpoint + thermostatic control logic.
+    """The fireplace as a thermostat: the whole control panel in one entity.
 
-    Use the Heating Mode select entity to choose Off / Full / Medium / Low /
-    Thermostatic. This entity provides the temperature setpoint and current
-    temperature readout used in Thermostatic mode.
+    - Heat / Off switches the fire on and off.
+    - Presets choose the heating mode (Low, Medium, Full, Thermostatic); they
+      are shared with the Heating Mode select entity.
+    - The target temperature is used in Thermostatic mode, where this entity
+      also runs the control loop on every coordinator update.
     """
 
     _attr_translation_key = "thermostat"
@@ -74,7 +78,15 @@ class MertikClimateEntity(MertikEntity, ClimateEntity, RestoreEntity):
     _attr_min_temp = MIN_TEMP
     _attr_max_temp = MAX_TEMP_C
     _attr_hvac_modes = [HVACMode.OFF, HVACMode.HEAT]
-    _attr_supported_features = ClimateEntityFeature.TARGET_TEMPERATURE
+    _attr_preset_modes = list(PRESET_TO_MODE)
+    # Target temperature stays supported in every mode so automations that
+    # set it never fail; it only takes effect in Thermostatic.
+    _attr_supported_features = (
+        ClimateEntityFeature.TARGET_TEMPERATURE
+        | ClimateEntityFeature.PRESET_MODE
+        | ClimateEntityFeature.TURN_ON
+        | ClimateEntityFeature.TURN_OFF
+    )
 
     def __init__(
         self,
@@ -101,6 +113,16 @@ class MertikClimateEntity(MertikEntity, ClimateEntity, RestoreEntity):
         last = await self.async_get_last_state()
         if last is not None and last.attributes.get(ATTR_TEMPERATURE) is not None:
             self._target_temp = float(last.attributes[ATTR_TEMPERATURE])
+        # Restore the heating mode from the preset if nothing else has (e.g.
+        # the Heating Mode select entity is disabled).
+        if (
+            self._dataservice.heating_mode is None
+            and last is not None
+            and last.attributes.get("preset_mode") in PRESET_TO_MODE
+        ):
+            self._dataservice.set_heating_mode(
+                PRESET_TO_MODE[last.attributes["preset_mode"]]
+            )
         # Treat the state at startup as the baseline: a restart with the fire
         # already running keeps the remembered setpoint.
         self._was_on = self._dataservice.is_on
@@ -174,6 +196,21 @@ class MertikClimateEntity(MertikEntity, ClimateEntity, RestoreEntity):
     def hvac_mode(self) -> HVACMode:
         return HVACMode.HEAT if self._dataservice.is_on else HVACMode.OFF
 
+    @property
+    def hvac_action(self) -> HVACAction:
+        """Heating when the burner is lit, idle on pilot only, else off."""
+        mertik = self._dataservice.mertik
+        if mertik.is_flame_on or mertik.is_igniting:
+            return HVACAction.HEATING
+        if self._dataservice.is_on:
+            return HVACAction.IDLE
+        return HVACAction.OFF
+
+    @property
+    def preset_mode(self) -> str | None:
+        """Current heating mode as a preset (None for Standby / not set)."""
+        return MODE_TO_PRESET.get(self._dataservice.heating_mode or "")
+
     # ---- Commands -------------------------------------------------------
 
     async def async_set_temperature(self, **kwargs: Any) -> None:
@@ -189,9 +226,30 @@ class MertikClimateEntity(MertikEntity, ClimateEntity, RestoreEntity):
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         if hvac_mode == HVACMode.OFF:
-            await self.hass.async_add_executor_job(self._dataservice.guard_flame_off)
-            self._dataservice.mark_optimistic_off()
-            self._dataservice.async_set_updated_data(None)
+            await self.async_turn_off()
+        elif hvac_mode == HVACMode.HEAT:
+            await self.async_turn_on()
+
+    async def async_turn_on(self) -> None:
+        """Switch the fire on in the current heating mode."""
+        if self._dataservice.is_on:
+            return
+        await self.hass.async_add_executor_job(self._dataservice.turn_on)
+        self._dataservice.async_set_updated_data(None)
+
+    async def async_turn_off(self) -> None:
+        """Switch the fire off, pilot included."""
+        await self.hass.async_add_executor_job(self._dataservice.turn_off)
+        self._dataservice.async_set_updated_data(None)
+
+    async def async_set_preset_mode(self, preset_mode: str) -> None:
+        """Choose the heating mode (shared with the Heating Mode select)."""
+        mode = PRESET_TO_MODE[preset_mode]
+        self._last_applied_mode = None  # re-evaluate if Thermostatic
+        await self.hass.async_add_executor_job(
+            self._dataservice.select_heating_mode, mode
+        )
+        self._dataservice.async_set_updated_data(None)
 
     # ---- Thermostatic logic (runs on every coordinator poll) ------------
 
@@ -216,15 +274,6 @@ class MertikClimateEntity(MertikEntity, ClimateEntity, RestoreEntity):
             )
         self._was_on = is_on
 
-    def _select_entity_id(self) -> str | None:
-        from homeassistant.helpers import entity_registry as er
-
-        if self.unique_id is None:
-            return None
-        registry = er.async_get(self.hass)
-        uid = self.unique_id.replace("-Thermostat", "-HeatingMode")
-        return registry.async_get_entity_id("select", DOMAIN, uid)
-
     def _run_thermostatic_logic(self) -> None:
         # If we are waiting for an ignition to complete, let the
         # coordinator handle it this cycle and skip the temperature
@@ -232,11 +281,7 @@ class MertikClimateEntity(MertikEntity, ClimateEntity, RestoreEntity):
         if self._dataservice.check_pending_mode():
             return
 
-        entity_id = self._select_entity_id()
-        if entity_id is None:
-            return
-        select_state = self.hass.states.get(entity_id)
-        if select_state is None or select_state.state != MODE_THERMO:
+        if self._dataservice.heating_mode != MODE_THERMO:
             self._last_applied_mode = None  # reset when leaving thermo mode
             return
 

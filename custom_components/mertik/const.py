@@ -32,6 +32,15 @@ MODE_LOW = "Low Heat"
 MODE_THERMO = "Thermostatic"
 HEATING_MODES = [MODE_STANDBY, MODE_FULL, MODE_MEDIUM, MODE_LOW, MODE_THERMO]
 
+# Thermostat (climate) presets: translation key -> heating mode
+PRESET_TO_MODE = {
+    "low_heat": MODE_LOW,
+    "medium_heat": MODE_MEDIUM,
+    "full_heat": MODE_FULL,
+    "thermostatic": MODE_THERMO,
+}
+MODE_TO_PRESET = {mode: preset for preset, mode in PRESET_TO_MODE.items()}
+
 # Flame height step range
 FLAME_MIN = 1
 FLAME_MAX = 12  # table has 12 entries; formula gives 13 for max (0xFF)

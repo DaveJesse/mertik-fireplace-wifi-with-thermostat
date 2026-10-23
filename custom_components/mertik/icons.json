@@ -2,7 +2,17 @@
   "entity": {
     "climate": {
       "thermostat": {
-        "default": "mdi:thermostat"
+        "default": "mdi:thermostat",
+        "state_attributes": {
+          "preset_mode": {
+            "state": {
+              "low_heat": "mdi:campfire",
+              "medium_heat": "mdi:fire",
+              "full_heat": "mdi:fire-circle",
+              "thermostatic": "mdi:thermostat"
+            }
+          }
+        }
       }
     },
     "select": {
