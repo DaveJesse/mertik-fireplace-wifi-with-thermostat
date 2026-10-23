@@ -7,7 +7,8 @@
         "data": {
           "host": "IP address of the WiFi box",
           "low_threshold": "Low heat threshold (degrees C below setpoint)",
-          "high_threshold": "Full heat threshold (degrees C below setpoint, must be greater than Low)"
+          "high_threshold": "Full heat threshold (degrees C below setpoint, must be greater than Low)",
+          "default_temperature": "Default target temperature (°C, applied each time the fire is switched on)"
         }
       },
       "reconfigure": {
@@ -22,7 +23,8 @@
     },
     "error": {
       "cannot_connect": "Unable to connect to the fireplace WiFi box. Check the IP address and that the device is powered on and connected to your network.",
-      "invalid_thresholds": "Thresholds must be positive numbers, and the Low threshold must be less than the Full threshold."
+      "invalid_thresholds": "Thresholds must be positive numbers, and the Low threshold must be less than the Full threshold.",
+      "invalid_default_temp": "Default target temperature must be between 5 and 36 °C."
     },
     "abort": {
       "already_configured": "This fireplace is already configured.",
@@ -108,13 +110,15 @@
           "temperature_sensor": "Temperature sensor (leave blank to use the fireplace handset)",
           "low_threshold": "Low heat threshold (degrees C below setpoint)",
           "high_threshold": "Full heat threshold (degrees C below setpoint, must be greater than Low)",
-          "temperature_step": "Thermostat setpoint step (degrees C)"
+          "temperature_step": "Thermostat setpoint step (degrees C)",
+          "default_temperature": "Default target temperature (°C, applied each time the fire is switched on)"
         }
       }
     },
     "error": {
       "invalid_thresholds": "Thresholds must be positive numbers, and the Low threshold must be less than the Full threshold.",
-      "invalid_temp_step": "Setpoint step must be a positive number."
+      "invalid_temp_step": "Setpoint step must be a positive number.",
+      "invalid_default_temp": "Default target temperature must be between 5 and 36 °C."
     }
   }
 }

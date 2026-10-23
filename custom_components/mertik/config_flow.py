@@ -22,7 +22,15 @@ from .const import (
     DEFAULT_HIGH_THRESHOLD,
     DEFAULT_TEMP_SENSOR,
     DEFAULT_TEMP_STEP,
+    CONF_DEFAULT_TARGET,
+    DEFAULT_TARGET_TEMP,
+    MIN_TARGET_TEMP,
+    MAX_TARGET_TEMP,
 )
+
+
+def _valid_target(value: float) -> bool:
+    return MIN_TARGET_TEMP <= value <= MAX_TARGET_TEMP
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -56,8 +64,12 @@ class MertikConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             low = user_input.get(CONF_LOW_THRESHOLD, DEFAULT_LOW_THRESHOLD)
             high = user_input.get(CONF_HIGH_THRESHOLD, DEFAULT_HIGH_THRESHOLD)
 
+            target = user_input.get(CONF_DEFAULT_TARGET, DEFAULT_TARGET_TEMP)
+
             if low <= 0 or high <= 0 or low >= high:
                 errors["base"] = "invalid_thresholds"
+            elif not _valid_target(target):
+                errors[CONF_DEFAULT_TARGET] = "invalid_default_temp"
             else:
                 await self.async_set_unique_id(host)
                 self._abort_if_unique_id_configured()
@@ -79,6 +91,9 @@ class MertikConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 ): vol.Coerce(float),
                 vol.Optional(
                     CONF_HIGH_THRESHOLD, default=DEFAULT_HIGH_THRESHOLD
+                ): vol.Coerce(float),
+                vol.Optional(
+                    CONF_DEFAULT_TARGET, default=DEFAULT_TARGET_TEMP
                 ): vol.Coerce(float),
             }
         )
@@ -178,6 +193,13 @@ class MertikOptionsFlow(config_entries.OptionsFlow):
             )
         )
 
+        current_target = float(
+            self._entry.options.get(
+                CONF_DEFAULT_TARGET,
+                self._entry.data.get(CONF_DEFAULT_TARGET, DEFAULT_TARGET_TEMP),
+            )
+        )
+
         if user_input is not None:
             low = user_input.get(CONF_LOW_THRESHOLD, current_low)
             high = user_input.get(CONF_HIGH_THRESHOLD, current_high)
@@ -186,6 +208,10 @@ class MertikOptionsFlow(config_entries.OptionsFlow):
                 errors["base"] = "invalid_thresholds"
             elif step <= 0:
                 errors[CONF_TEMP_STEP] = "invalid_temp_step"
+            elif not _valid_target(
+                user_input.get(CONF_DEFAULT_TARGET, current_target)
+            ):
+                errors[CONF_DEFAULT_TARGET] = "invalid_default_temp"
             else:
                 return self.async_create_entry(title="", data=user_input)
 
@@ -207,6 +233,9 @@ class MertikOptionsFlow(config_entries.OptionsFlow):
                     float
                 ),
                 vol.Optional(CONF_TEMP_STEP, default=current_step): vol.Coerce(float),
+                vol.Optional(CONF_DEFAULT_TARGET, default=current_target): vol.Coerce(
+                    float
+                ),
             }
         )
         return self.async_show_form(

@@ -1,7 +1,6 @@
 """Heating mode selector for Mertik Maxitrol fireplace."""
 
 from homeassistant.components.select import SelectEntity
-from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
@@ -31,7 +30,6 @@ async def async_setup_entry(
 class MertikHeatingModeSelect(MertikEntity, SelectEntity, RestoreEntity):
     _attr_translation_key = "heating_mode"
     _attr_options = HEATING_MODES
-    _attr_entity_category = EntityCategory.CONFIG
 
     def __init__(
         self, dataservice: MertikDataCoordinator, entry_id: str, device_name: str

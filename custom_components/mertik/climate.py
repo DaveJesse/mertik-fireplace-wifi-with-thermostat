@@ -25,6 +25,10 @@ from .const import (
     DEFAULT_HIGH_THRESHOLD,
     DEFAULT_TEMP_SENSOR,
     DEFAULT_TEMP_STEP,
+    CONF_DEFAULT_TARGET,
+    DEFAULT_TARGET_TEMP,
+    MIN_TARGET_TEMP,
+    MAX_TARGET_TEMP,
     MODE_STANDBY,
     MODE_FULL,
     MODE_MEDIUM,
@@ -39,9 +43,8 @@ PARALLEL_UPDATES = 1
 
 _LOGGER = logging.getLogger(__name__)
 
-MIN_TEMP = 5.0
-MAX_TEMP_C = 36.0
-DEFAULT_TARGET = 20.0
+MIN_TEMP = MIN_TARGET_TEMP
+MAX_TEMP_C = MAX_TARGET_TEMP
 
 
 async def async_setup_entry(
@@ -84,10 +87,13 @@ class MertikClimateEntity(MertikEntity, ClimateEntity, RestoreEntity):
         super().__init__(dataservice, entry_id, device_name)
         self._entry = entry
         self._attr_unique_id = entry_id + "-Thermostat"
-        self._target_temp = DEFAULT_TARGET
+        self._target_temp = self._default_target
         self._last_applied_mode: str | None = (
             None  # prevent re-sending same command every poll
         )
+        # Previous fire on/off state, used to detect switch-on (off -> on) so
+        # the setpoint can be reset to the configured default.
+        self._was_on: bool | None = None
 
     async def async_added_to_hass(self) -> None:
         """Restore target temperature from last known state."""
@@ -95,6 +101,9 @@ class MertikClimateEntity(MertikEntity, ClimateEntity, RestoreEntity):
         last = await self.async_get_last_state()
         if last is not None and last.attributes.get(ATTR_TEMPERATURE) is not None:
             self._target_temp = float(last.attributes[ATTR_TEMPERATURE])
+        # Treat the state at startup as the baseline: a restart with the fire
+        # already running keeps the remembered setpoint.
+        self._was_on = self._dataservice.is_on
 
     # ---- Config helpers --------------------------------------------------
 
@@ -113,6 +122,11 @@ class MertikClimateEntity(MertikEntity, ClimateEntity, RestoreEntity):
     @property
     def _temp_sensor_entity_id(self) -> str:
         return self._get_option(CONF_TEMP_SENSOR, DEFAULT_TEMP_SENSOR)
+
+    @property
+    def _default_target(self) -> float:
+        """Setpoint applied each time the fire is switched on."""
+        return float(self._get_option(CONF_DEFAULT_TARGET, DEFAULT_TARGET_TEMP))
 
     @property
     def target_temperature_step(self) -> float:
@@ -182,8 +196,25 @@ class MertikClimateEntity(MertikEntity, ClimateEntity, RestoreEntity):
     # ---- Thermostatic logic (runs on every coordinator poll) ------------
 
     def _handle_coordinator_update(self) -> None:
+        self._apply_default_on_switch_on()
         self._run_thermostatic_logic()
         super()._handle_coordinator_update()
+
+    def _apply_default_on_switch_on(self) -> None:
+        """Reset the setpoint to the configured default when the fire turns on.
+
+        Covers every way of switching on (HA switch, handset, MyFire app),
+        because it watches the fire's on/off state rather than the switch.
+        """
+        is_on = self._dataservice.is_on
+        if self._was_on is False and is_on:
+            self._target_temp = self._default_target
+            self._last_applied_mode = None
+            _LOGGER.debug(
+                "Fire switched on: setpoint reset to default %.1f C",
+                self._target_temp,
+            )
+        self._was_on = is_on
 
     def _select_entity_id(self) -> str | None:
         from homeassistant.helpers import entity_registry as er
@@ -255,6 +286,16 @@ class MertikClimateEntity(MertikEntity, ClimateEntity, RestoreEntity):
             target_mode if target_mode else "Standby",
         )
 
+        # Fire switched off (and not in thermostatic standby): forget the last
+        # mode applied so that the next switch-on re-evaluates and ignites.
+        # This must come before the "unchanged mode" check below; otherwise a
+        # mode remembered from before the fire was turned off (e.g. Full Heat)
+        # matches the new demand and ignition is never sent -- the fire then
+        # sits at pilot only after switch-on.
+        if not self._dataservice.is_on and not self._dataservice._in_standby:
+            self._last_applied_mode = None
+            return
+
         # Only act if the required mode has changed -- prevents sending the
         # same command every 10 seconds when the temperature is stable.
         if target_mode == self._last_applied_mode:
@@ -277,12 +318,6 @@ class MertikClimateEntity(MertikEntity, ClimateEntity, RestoreEntity):
 
                 self.hass.async_create_task(_do_standby())
         else:
-            # Reset _last_applied_mode when fire is off so we re-evaluate as
-            # soon as it turns back on, then bail -- no point dispatching an
-            # executor job that apply_heating_mode() would reject anyway.
-            if not self._dataservice.is_on and not self._dataservice._in_standby:
-                self._last_applied_mode = MODE_STANDBY
-                return
             _LOGGER.info(
                 "Thermostatic: applying %s (diff=%.1fC, sensor=%s)",
                 target_mode,

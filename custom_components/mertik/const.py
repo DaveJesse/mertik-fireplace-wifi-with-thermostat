@@ -16,6 +16,12 @@ DEFAULT_TEMP_SENSOR = ""  # empty = use fireplace handset sensor
 CONF_TEMP_STEP = "temperature_step"
 DEFAULT_TEMP_STEP = 0.1
 
+# Default thermostat target temperature, applied each time the fire is switched on
+CONF_DEFAULT_TARGET = "default_temperature"
+DEFAULT_TARGET_TEMP = 20.0
+MIN_TARGET_TEMP = 5.0
+MAX_TARGET_TEMP = 36.0
+
 # Heating mode select options
 MODE_OFF = "Off"  # kept for compatibility, not shown in UI
 MODE_STANDBY = "Standby"  # pilot only; shown by thermostat when room is warm
