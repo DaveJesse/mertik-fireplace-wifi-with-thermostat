@@ -3,9 +3,11 @@
     "step": {
       "user": {
         "title": "Mertik Maxitrol gaspejs",
-        "description": "Indtast IP-adressen på din myfire WiFi-boks og tærsklerne for termostatstyring.",
+        "description": "Indtast et navn og IP-adressen på myfire WiFi-boksen, og vælg derefter temperatursensor og termostatindstillinger. Hver pejs har sine egne indstillinger.",
         "data": {
+          "name": "Navn på pejs",
           "host": "IP-adresse på WiFi-boksen",
+          "temperature_sensor": "Temperatursensor til termostatstyring (Mertik-fjernbetjening bruger pejsens egen)",
           "low_threshold": "Tærskel for lav varme (grader C under indstillet temperatur)",
           "high_threshold": "Tærskel for fuld varme (grader C under indstillet temperatur, skal være større end Lav)",
           "default_temperature": "Standard måltemperatur (°C, bruges hver gang pejsen tændes)"
@@ -46,11 +48,6 @@
     }
   },
   "entity": {
-    "switch": {
-      "aux": {
-        "name": "Aux"
-      }
-    },
     "climate": {
       "thermostat": {
         "name": "Termostat"
@@ -59,11 +56,6 @@
     "select": {
       "heating_mode": {
         "name": "Varmetilstand"
-      }
-    },
-    "number": {
-      "flame_height": {
-        "name": "Flammehøjde"
       }
     },
     "sensor": {
@@ -93,11 +85,19 @@
           "f43": "F43 – Ingen modtager tilsluttet",
           "f44": "F44 – Fjernbetjeningen er uden for rækkevidde eller har lavt batteri"
         }
+      },
+      "flame_height": {
+        "name": "Flammehøjde"
       }
     },
     "light": {
       "light": {
         "name": "Lys"
+      }
+    },
+    "binary_sensor": {
+      "aux": {
+        "name": "Aux-brænder"
       }
     }
   },

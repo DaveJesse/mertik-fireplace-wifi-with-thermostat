@@ -1,4 +1,4 @@
-"""Switch entities for Mertik Maxitrol fireplace (on/off and aux)."""
+"""Switch entity for Mertik Maxitrol fireplace (on/off)."""
 
 from typing import Any
 
@@ -24,7 +24,6 @@ async def async_setup_entry(
     async_add_entities(
         [
             MertikOnOffSwitchEntity(dataservice, entry.entry_id, entry.title),
-            MertikAuxOnOffSwitchEntity(dataservice, entry.entry_id, entry.title),
         ]
     )
 
@@ -60,24 +59,3 @@ class MertikOnOffSwitchEntity(MertikEntity, SwitchEntity):
         self._dataservice.mark_optimistic_off()
         self._dataservice.async_set_updated_data(None)
 
-
-class MertikAuxOnOffSwitchEntity(MertikEntity, SwitchEntity):
-    _attr_translation_key = "aux"
-
-    def __init__(
-        self, dataservice: MertikDataCoordinator, entry_id: str, device_name: str
-    ) -> None:
-        super().__init__(dataservice, entry_id, device_name)
-        self._attr_unique_id = entry_id + "-AuxOnOff"
-
-    @property
-    def is_on(self) -> bool:
-        return bool(self._dataservice.is_aux_on)
-
-    async def async_turn_on(self, **kwargs: Any) -> None:
-        await self.hass.async_add_executor_job(self._dataservice.aux_on)
-        self._dataservice.async_set_updated_data(None)
-
-    async def async_turn_off(self, **kwargs: Any) -> None:
-        await self.hass.async_add_executor_job(self._dataservice.aux_off)
-        self._dataservice.async_set_updated_data(None)

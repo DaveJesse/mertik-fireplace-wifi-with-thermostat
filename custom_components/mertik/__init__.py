@@ -20,7 +20,11 @@ _LOGGER = logging.getLogger(__name__)
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
-PLATFORMS = ["climate", "light", "number", "select", "sensor", "switch"]
+PLATFORMS = ["binary_sensor", "climate", "light", "select", "sensor", "switch"]
+
+# Entities from earlier versions that have been replaced by read-only ones:
+# (domain, unique_id suffix)
+REMOVED_ENTITIES = [("switch", "-AuxOnOff"), ("number", "-FlameHeight")]
 
 type MertikConfigEntry = ConfigEntry[MertikDataCoordinator]
 
@@ -35,6 +39,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: MertikConfigEntry) -> bo
             translation_key="cannot_connect",
         ) from err
 
+    _remove_old_entities(hass, entry)
+
     coordinator = MertikDataCoordinator(hass, mertik, entry)
     await coordinator.async_config_entry_first_refresh()
     entry.runtime_data = coordinator
@@ -45,6 +51,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: MertikConfigEntry) -> bo
     entry.async_on_unload(entry.add_update_listener(_async_options_updated))
 
     return True
+
+
+def _remove_old_entities(hass: HomeAssistant, entry: MertikConfigEntry) -> None:
+    """Delete the Aux switch and Flame Height control left by earlier versions.
+
+    They are now read-only sensors; removing the old ones avoids leaving
+    orphaned, unavailable entities behind after an upgrade.
+    """
+    registry = er.async_get(hass)
+    for domain, suffix in REMOVED_ENTITIES:
+        entity_id = registry.async_get_entity_id(
+            domain, DOMAIN, entry.entry_id + suffix
+        )
+        if entity_id is not None:
+            _LOGGER.info("Removing replaced entity %s", entity_id)
+            registry.async_remove(entity_id)
 
 
 async def _async_options_updated(hass: HomeAssistant, entry: MertikConfigEntry) -> None:

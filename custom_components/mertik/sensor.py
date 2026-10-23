@@ -1,4 +1,4 @@
-"""Sensor entities for Mertik Maxitrol fireplace (ambient temperature, fault code)."""
+"""Sensor entities for Mertik Maxitrol fireplace (temperature, fault code, flame height)."""
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
 from homeassistant.const import EntityCategory, UnitOfTemperature
@@ -50,6 +50,9 @@ async def async_setup_entry(
             MertikFaultCodeSensorEntity(
                 dataservice, entry.entry_id, entry.title
             ),
+            MertikFlameHeightSensorEntity(
+                dataservice, entry.entry_id, entry.title
+            ),
         ]
     )
 
@@ -86,3 +89,25 @@ class MertikFaultCodeSensorEntity(MertikEntity, SensorEntity):
     @property
     def native_value(self) -> str:
         return FAULT_CODE_MAP.get(self._dataservice.fault_code, "none")
+
+
+class MertikFlameHeightSensorEntity(MertikEntity, SensorEntity):
+    """Current flame height step (0 = off, 1 = lowest, 12 = highest).
+
+    Read-only: flame height is set by the heating mode. The value is tracked
+    from the commands the integration sends, because the device's status
+    packet does not report it reliably.
+    """
+
+    _attr_translation_key = "flame_height"
+    _attr_icon = "mdi:fire"
+
+    def __init__(
+        self, dataservice: MertikDataCoordinator, entry_id: str, device_name: str
+    ) -> None:
+        super().__init__(dataservice, entry_id, device_name)
+        self._attr_unique_id = entry_id + "-FlameHeightLevel"
+
+    @property
+    def native_value(self) -> int:
+        return self._dataservice.get_flame_height()

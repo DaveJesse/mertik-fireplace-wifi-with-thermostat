@@ -7,7 +7,7 @@ from typing import Any
 import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.config_entries import ConfigFlowResult
-from homeassistant.const import CONF_HOST
+from homeassistant.const import CONF_HOST, CONF_NAME
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 from homeassistant.components.sensor import SensorDeviceClass
@@ -24,6 +24,7 @@ from .const import (
     DEFAULT_TEMP_STEP,
     CONF_DEFAULT_TARGET,
     DEFAULT_TARGET_TEMP,
+    DEFAULT_NAME,
     MIN_TARGET_TEMP,
     MAX_TARGET_TEMP,
 )
@@ -53,7 +54,7 @@ def _temp_sensor_options(hass: HomeAssistant) -> dict[str, str]:
 
 
 class MertikConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Initial setup: name, host, thresholds."""
+    """Initial setup: name, host, temperature sensor, thresholds, default setpoint."""
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -79,13 +80,17 @@ class MertikConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 if not can_connect:
                     errors["base"] = "cannot_connect"
                 else:
-                    return self.async_create_entry(
-                        title="Mertik Maxitrol", data=user_input
-                    )
+                    data = dict(user_input)
+                    name = data.pop(CONF_NAME, DEFAULT_NAME).strip() or DEFAULT_NAME
+                    return self.async_create_entry(title=name, data=data)
 
         schema = vol.Schema(
             {
+                vol.Required(CONF_NAME, default=DEFAULT_NAME): str,
                 vol.Required(CONF_HOST): str,
+                vol.Optional(CONF_TEMP_SENSOR, default=DEFAULT_TEMP_SENSOR): vol.In(
+                    _temp_sensor_options(self.hass)
+                ),
                 vol.Optional(
                     CONF_LOW_THRESHOLD, default=DEFAULT_LOW_THRESHOLD
                 ): vol.Coerce(float),

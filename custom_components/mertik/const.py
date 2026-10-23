@@ -1,6 +1,7 @@
 """Constants for the Mertik Maxitrol Fireplace integration."""
 
 DOMAIN = "mertik"
+DEFAULT_NAME = "Mertik Maxitrol"
 
 # Config / options entry keys
 CONF_LOW_THRESHOLD = "low_threshold"

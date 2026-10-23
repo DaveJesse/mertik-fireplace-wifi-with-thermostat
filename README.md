@@ -56,13 +56,21 @@ ITALKERO, Signi, SAFIRE, attika, Ortal, and Fire Connects.
 | Entity | Type | Notes |
 |--------|------|-------|
 | Fireplace | Switch | Main on/off |
-| Aux | Switch | Rear / second burner |
-| Flame Height | Number | Steps 1–13; shows 0 when fire is off |
-| Light | Light | Dimmable; stays on when fire is turned off |
-| Ambient Temperature | Sensor | Room temperature from paired handset |
-| Fault Code | Sensor | Active Mertik fault, e.g. F44 (handset out of range). Shows "No fault" when all clear. |
 | Heating Mode | Select | Standby / Full Heat / Medium Heat / Low Heat / Thermostatic |
-| Thermostat | Climate | Setpoint display and thermostatic control |
+| Thermostat | Climate | Target temperature, measured room temperature and thermostatic control |
+| Light | Light | Dimmable; stays on when fire is turned off |
+| Aux Burner | Binary sensor | Read-only: shows whether the rear / second burner is lit (set by the heating mode) |
+| Flame Height | Sensor | Read-only: current flame step, 0 when the fire is off (set by the heating mode) |
+| Handset Temperature | Sensor | Room temperature from the paired handset. Hidden automatically when another temperature sensor is selected. |
+| Fault Code | Sensor | Active Mertik fault, e.g. F44 (handset out of range). Shows "No fault" when all clear. |
+
+Aux and Flame Height are indicators, not controls: the heating mode decides
+them. Versions before 2.5.0 had them as a switch and a slider; those are
+removed automatically on upgrade.
+
+Each fireplace you add has its own name, temperature sensor, thresholds and
+default target temperature, so two fires in one house can use different room
+sensors.
 
 ---
 
@@ -84,7 +92,10 @@ the main burners and the pilot flame.
 ### Thermostatic control
 
 Set the target temperature using the **Thermostat** entity's temperature
-slider. HA reads the current room temperature every 10 seconds and applies
+slider. Each time the fire is switched on (from HA, the handset or the MyFire
+app) the target is reset to the fireplace's **Default target temperature**
+(20 °C unless changed); changes made while the fire is on last until it is
+switched off. HA reads the current room temperature every 10 seconds and applies
 the appropriate heating mode:
 
 | Room temperature vs setpoint | Mode applied |
@@ -170,10 +181,12 @@ so the IP does not change.
 
 | Parameter | Required | Description |
 |-----------|----------|-------------|
-| **Name** | Yes | Display name for the device in Home Assistant |
+| **Name** | Yes | Display name for the fireplace in Home Assistant, e.g. `Lounge fire`. Default: `Mertik Maxitrol`. |
 | **Host** | Yes | IP address of the myfire WiFi box (e.g. `192.168.1.100`) |
+| **Temperature sensor** | No | Room temperature sensor for thermostatic control. Default: the Mertik handset. |
 | **Low Heat threshold** | No | Degrees °C below the thermostat setpoint at which Low Heat is applied. Default: `1.0`. Must be greater than 0 and less than the Full Heat threshold. |
 | **Full Heat threshold** | No | Degrees °C below the thermostat setpoint at which Full Heat is applied. Default: `2.0`. Must be greater than the Low Heat threshold. |
+| **Default target temperature** | No | Thermostat target applied each time the fire is switched on. Default: `20.0`. 5–36 °C. |
 
 #### Options (Settings → Devices & Services → Mertik Maxitrol → Configure)
 
@@ -183,6 +196,7 @@ so the IP does not change.
 | **Low Heat threshold** | See above. Can be adjusted without restarting HA. |
 | **Full Heat threshold** | See above. Can be adjusted without restarting HA. |
 | **Thermostat setpoint step** | Increment for the thermostat temperature slider (degrees °C). Default: `0.1`. Must be greater than 0. |
+| **Default target temperature** | See above. |
 
 ### Removing the integration
 
@@ -225,8 +239,8 @@ even if the room temperature drops below the setpoint. To resume thermostatic
 control, turn the Fireplace switch back on.
 
 **Rear burner at ignition** — Both burners light physically at ignition.
-The integration sends `aux_on` immediately after ignite so the Aux switch
-shows On and can be turned off.
+The integration sends `aux_on` immediately after ignite so the Aux Burner
+indicator shows On; the heating mode then turns it off if not needed.
 
 **Light when fire turns off** — The device physically extinguishes the light
 when the fire is turned off. The integration detects this and immediately
@@ -269,16 +283,9 @@ are met. Controls work correctly regardless of whether "APP" is displayed.
 
 ---
 
-### Flame height does not change after adjusting the slider
+### Flame Height indicator does not match the fire
 
-**Symptom:** Moving the Flame Height slider has no visible effect, or the slider snaps back.
-
-**Description:** The device status packet always reports the post-ignition baseline flame level regardless of `set_flame_height` commands. The integration tracks flame height locally (from commands), so the slider may not match device reality after a restart or reconnect. Additionally, flame height commands sent within ~35 seconds of ignition are silently ignored by the firmware.
-
-**Resolution:**
-1. Wait at least 35 seconds after the fire ignites before adjusting flame height.
-2. Listen for the audible beep from the handset — it confirms the command was received.
-3. If commands never take effect, confirm the fire is actually burning (not in thermostatic Standby pilot mode).
+**Description:** The device status packet always reports the post-ignition baseline flame level regardless of `set_flame_height` commands, so the integration shows the flame step it last commanded. After a restart or reconnect it may not match the fire until the heating mode next changes. Flame height commands sent within ~35 seconds of ignition are ignored by the firmware; the integration waits for this automatically.
 
 ---
 

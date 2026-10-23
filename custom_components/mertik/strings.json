@@ -3,9 +3,11 @@
     "step": {
       "user": {
         "title": "Mertik Maxitrol Fireplace",
-        "description": "Enter the IP address of your myfire WiFi box and thermostatic control thresholds.",
+        "description": "Enter a name and the IP address of the myfire WiFi box, then choose the temperature sensor and thermostatic settings. Each fireplace has its own settings.",
         "data": {
+          "name": "Fireplace name",
           "host": "IP address of the WiFi box",
+          "temperature_sensor": "Temperature sensor for thermostatic control (Mertik handset uses the fireplace's own)",
           "low_threshold": "Low heat threshold (degrees C below setpoint)",
           "high_threshold": "Full heat threshold (degrees C below setpoint, must be greater than Low)",
           "default_temperature": "Default target temperature (°C, applied each time the fire is switched on)"
@@ -46,11 +48,6 @@
     }
   },
   "entity": {
-    "switch": {
-      "aux": {
-        "name": "Aux"
-      }
-    },
     "climate": {
       "thermostat": {
         "name": "Thermostat"
@@ -59,11 +56,6 @@
     "select": {
       "heating_mode": {
         "name": "Heating Mode"
-      }
-    },
-    "number": {
-      "flame_height": {
-        "name": "Flame Height"
       }
     },
     "sensor": {
@@ -93,11 +85,19 @@
           "f43": "F43 – No receiver connected",
           "f44": "F44 – Handset not in range or low battery"
         }
+      },
+      "flame_height": {
+        "name": "Flame height"
       }
     },
     "light": {
       "light": {
         "name": "Light"
+      }
+    },
+    "binary_sensor": {
+      "aux": {
+        "name": "Aux burner"
       }
     }
   },
