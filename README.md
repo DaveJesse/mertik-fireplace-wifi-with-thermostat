@@ -238,6 +238,8 @@ There is no user-configurable polling interval. The interval is fixed because th
 
 ## Installation
 
+Requires **Home Assistant 2025.3 or later**.
+
 ### HACS (recommended)
 1. HACS → Integrations → ⋮ → Custom repositories
 2. Add this repository URL, category: Integration
