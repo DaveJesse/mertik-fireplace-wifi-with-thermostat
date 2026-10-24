@@ -150,18 +150,28 @@ app) the target is reset to the fireplace's **Default target temperature**
 switched off. HA reads the current room temperature every 10 seconds and applies
 the appropriate heating mode:
 
-| Room temperature vs setpoint | Mode applied |
-|------------------------------|--------------|
-| At or above setpoint | Standby (pilot flame only) |
-| Within low threshold (default 1 °C) | Low Heat |
-| Within high threshold (default 2 °C) | Medium Heat |
-| More than high threshold below | Full Heat |
+With **gap = setpoint − room temperature**, Low threshold *L* (default 1 °C),
+Full threshold *F* (default 2 °C) and hysteresis *h* (default 0.1 °C):
+
+| Gap | Mode applied |
+|-----|--------------|
+| gap ≤ −h | Standby (pilot flame only) |
+| h ≤ gap ≤ L − h | Low Heat |
+| L + h ≤ gap ≤ F − h | Medium Heat |
+| gap ≥ F + h | Full Heat |
+
+Between these bands (within *h* either side of 0, *L* and *F*) the current
+mode is kept, so a sensor reading that wobbles around a threshold does not
+make the fire switch back and forth. Example with a 19.5 °C setpoint and the
+defaults: the burner drops to pilot at 19.6 °C and relights at 19.4 °C.
 
 When the room reaches the setpoint the main burners are extinguished but
 the **pilot flame remains lit**, allowing fast re-ignition when the room
-cools. To extinguish the pilot as well, turn off the Fireplace switch.
+cools. Once the burner has dropped to pilot it is not relit for at least the
+**Minimum time between re-ignitions** (default 2 minutes), to limit wear on
+the igniter. To extinguish the pilot as well, turn off the Fireplace switch.
 
-The default thresholds are 1 °C (Low) and 2 °C (High) and are adjustable via
+The thresholds, hysteresis and minimum re-ignition time are adjustable via
 **Settings → Devices & Services → Mertik → Configure**.
 
 **Cold start behaviour** — when the thermostat calls for heat from fully off,
@@ -249,6 +259,8 @@ so the IP does not change.
 | **Full Heat threshold** | See above. Can be adjusted without restarting HA. |
 | **Thermostat setpoint step** | Increment for the thermostat temperature slider (degrees °C). Default: `0.1`. Must be greater than 0. |
 | **Default target temperature** | See above. |
+| **Hysteresis** | Degrees °C either side of each threshold within which the current mode is kept (see *Thermostatic control*). Default: `0.1`. Twice the value must fit within the Low band and the Medium band. |
+| **Minimum time between re-ignitions** | Minutes the burner stays on pilot after the thermostat has turned it down, before it may relight. Default: `2`. 0–60. |
 | **Switch the light on when the fire is switched on** | On by default, matching the handset. When you switch the fire on from Home Assistant, the fire light comes on at its last brightness as soon as a flame is seen. It is only done once per switch-on, so a light you turn off stays off while the fire cycles. The light can always be switched on and off on its own, with the fire on or off. |
 
 ### Removing the integration

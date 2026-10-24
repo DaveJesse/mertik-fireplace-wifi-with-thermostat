@@ -1,6 +1,7 @@
 """Climate entity -- thermostat setpoint display and thermostatic control logic."""
 
 import logging
+from datetime import datetime
 from typing import Any, TypeVar
 
 from homeassistant.components.climate import (
@@ -13,6 +14,7 @@ from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
+from homeassistant.util import dt as dt_util
 
 from . import MertikConfigEntry
 from .coordinator import MertikDataCoordinator
@@ -27,6 +29,10 @@ from .const import (
     DEFAULT_TEMP_STEP,
     CONF_DEFAULT_TARGET,
     DEFAULT_TARGET_TEMP,
+    CONF_HYSTERESIS,
+    DEFAULT_HYSTERESIS,
+    CONF_MIN_REIGNITION,
+    DEFAULT_MIN_REIGNITION,
     MIN_TARGET_TEMP,
     MAX_TARGET_TEMP,
     MODE_STANDBY,
@@ -61,6 +67,59 @@ async def async_setup_entry(
             MertikClimateEntity(dataservice, entry.entry_id, entry.title, entry),
         ]
     )
+
+
+# Heating modes in order of increasing heat output.
+_HEAT_ORDER = [MODE_STANDBY, MODE_LOW, MODE_MEDIUM, MODE_FULL]
+
+
+def choose_thermostatic_mode(
+    gap: float,
+    low: float,
+    full: float,
+    hysteresis: float,
+    current: str | None,
+) -> str:
+    """Pick the heating mode for gap = setpoint - room temperature.
+
+    With hysteresis h the bands are:
+
+        gap <= -h                  Standby (pilot only)
+        h <= gap <= low - h        Low Heat
+        low + h <= gap <= full - h Medium Heat
+        gap >= full + h            Full Heat
+
+    Inside the 2h-wide dead zone around each boundary (0, low, full) the
+    current mode is kept if it is one of the two modes either side of that
+    boundary; a mode further away is moved to the nearer of the two. With no
+    current mode (just switched on) the plain boundary decides.
+    """
+    h = hysteresis
+    if gap <= -h:
+        return MODE_STANDBY
+    if h <= gap <= low - h:
+        return MODE_LOW
+    if low + h <= gap <= full - h:
+        return MODE_MEDIUM
+    if gap >= full + h:
+        return MODE_FULL
+
+    # Dead zone: find the boundary we are near and the modes either side.
+    if gap < h:
+        boundary, below, above = 0.0, MODE_STANDBY, MODE_LOW
+    elif gap < low + h:
+        boundary, below, above = low, MODE_LOW, MODE_MEDIUM
+    else:
+        boundary, below, above = full, MODE_MEDIUM, MODE_FULL
+
+    if current in (below, above):
+        return current
+    if current is None:
+        return above if gap > boundary else below
+    # Current mode is further away: move to the nearer neighbour.
+    if _HEAT_ORDER.index(current) > _HEAT_ORDER.index(above):
+        return above
+    return below
 
 
 class MertikClimateEntity(MertikEntity, ClimateEntity, RestoreEntity):
@@ -103,6 +162,13 @@ class MertikClimateEntity(MertikEntity, ClimateEntity, RestoreEntity):
         self._last_applied_mode: str | None = (
             None  # prevent re-sending same command every poll
         )
+        # Mode the thermostat last put the fire in (kept across setpoint
+        # changes so hysteresis knows where it is; cleared when the fire is
+        # switched off or Thermostatic is left).
+        self._thermo_mode: str | None = None
+        # When the thermostat last dropped the burner to pilot; re-ignition is
+        # held off until the minimum re-ignition time has passed.
+        self._standby_since: datetime | None = None
         # Previous fire on/off state, used to detect switch-on (off -> on) so
         # the setpoint can be reset to the configured default.
         self._was_on: bool | None = None
@@ -144,6 +210,16 @@ class MertikClimateEntity(MertikEntity, ClimateEntity, RestoreEntity):
     @property
     def _temp_sensor_entity_id(self) -> str:
         return self._get_option(CONF_TEMP_SENSOR, DEFAULT_TEMP_SENSOR)
+
+    @property
+    def _hysteresis(self) -> float:
+        return float(self._get_option(CONF_HYSTERESIS, DEFAULT_HYSTERESIS))
+
+    @property
+    def _min_reignition_seconds(self) -> float:
+        return 60.0 * float(
+            self._get_option(CONF_MIN_REIGNITION, DEFAULT_MIN_REIGNITION)
+        )
 
     @property
     def _default_target(self) -> float:
@@ -284,6 +360,8 @@ class MertikClimateEntity(MertikEntity, ClimateEntity, RestoreEntity):
 
         if self._dataservice.heating_mode != MODE_THERMO:
             self._last_applied_mode = None  # reset when leaving thermo mode
+            self._thermo_mode = None
+            self._standby_since = None
             return
 
         current = self._get_current_temperature()
@@ -300,6 +378,7 @@ class MertikClimateEntity(MertikEntity, ClimateEntity, RestoreEntity):
                 )
                 if self._last_applied_mode != MODE_STANDBY:
                     self._last_applied_mode = MODE_STANDBY
+                    self._thermo_mode = MODE_STANDBY
 
                     async def _do_standby_fault() -> None:
                         await self.hass.async_add_executor_job(
@@ -314,14 +393,29 @@ class MertikClimateEntity(MertikEntity, ClimateEntity, RestoreEntity):
         diff = self._target_temp - current
         sensor_id = self._temp_sensor_entity_id or "Mertik handset"
 
-        if diff <= 0:
-            target_mode = MODE_STANDBY  # room at/above setpoint -> standby
-        elif diff < self._low_thresh:
-            target_mode = MODE_LOW
-        elif diff < self._high_thresh:
-            target_mode = MODE_MEDIUM
-        else:
-            target_mode = MODE_FULL
+        target_mode = choose_thermostatic_mode(
+            diff,
+            self._low_thresh,
+            self._high_thresh,
+            self._hysteresis,
+            self._thermo_mode,
+        )
+
+        # Minimum time between re-ignitions: once the thermostat has dropped
+        # the burner to pilot, keep it there until the time has passed.
+        if (
+            target_mode != MODE_STANDBY
+            and self._thermo_mode == MODE_STANDBY
+            and self._standby_since is not None
+        ):
+            waited = (dt_util.utcnow() - self._standby_since).total_seconds()
+            if waited < self._min_reignition_seconds:
+                _LOGGER.debug(
+                    "Thermostatic: %s wanted, re-ignition held for %.0fs more",
+                    target_mode,
+                    self._min_reignition_seconds - waited,
+                )
+                target_mode = MODE_STANDBY
 
         _LOGGER.debug(
             "Thermostatic: sensor=%s current=%.1fC setpoint=%.1fC diff=%.1fC -> %s",
@@ -340,6 +434,8 @@ class MertikClimateEntity(MertikEntity, ClimateEntity, RestoreEntity):
         # sits at pilot only after switch-on.
         if not self._dataservice.is_on and not self._dataservice._in_standby:
             self._last_applied_mode = None
+            self._thermo_mode = None
+            self._standby_since = None
             return
 
         # Only act if the required mode has changed -- prevents sending the
@@ -348,6 +444,15 @@ class MertikClimateEntity(MertikEntity, ClimateEntity, RestoreEntity):
             return
 
         self._last_applied_mode = target_mode
+        # Start the re-ignition timer only when a lit burner drops to pilot,
+        # not when the fire is first armed in an already-warm room.
+        if target_mode == MODE_STANDBY and self._thermo_mode in (
+            MODE_LOW,
+            MODE_MEDIUM,
+            MODE_FULL,
+        ):
+            self._standby_since = dt_util.utcnow()
+        self._thermo_mode = target_mode
 
         if target_mode == MODE_STANDBY:
             if self._dataservice.is_on:

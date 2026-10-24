@@ -126,6 +126,8 @@
           "high_threshold": "Tærskel for fuld varme (grader C under indstillet temperatur, skal være større end Lav)",
           "temperature_step": "Trin for indstillet temperatur (grader C)",
           "default_temperature": "Standard måltemperatur (°C, bruges hver gang pejsen tændes)",
+          "hysteresis": "Hysterese (grader C på hver side af hver tærskel)",
+          "min_reignition_minutes": "Mindste tid mellem gentændinger (minutter)",
           "light_with_fire": "Tænd pejsens lys, når pejsen tændes"
         }
       }
@@ -133,7 +135,9 @@
     "error": {
       "invalid_thresholds": "Tærsklerne skal være positive tal, og tærsklen for Lav skal være mindre end tærsklen for Fuld.",
       "invalid_temp_step": "Trinnet for indstillet temperatur skal være et positivt tal.",
-      "invalid_default_temp": "Standard måltemperatur skal være mellem 5 og 36 °C."
+      "invalid_default_temp": "Standard måltemperatur skal være mellem 5 og 36 °C.",
+      "invalid_hysteresis": "Hysteresen skal være 0 eller mere, og det dobbelte skal kunne være inden for Lav-båndet (Lav-tærsklen) og Middel-båndet (Fuld-tærsklen minus Lav-tærsklen).",
+      "invalid_min_reignition": "Mindste tid mellem gentændinger skal være mellem 0 og 60 minutter."
     }
   }
 }

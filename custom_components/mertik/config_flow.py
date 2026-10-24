@@ -27,6 +27,11 @@ from .const import (
     DEFAULT_NAME,
     CONF_LIGHT_WITH_FIRE,
     DEFAULT_LIGHT_WITH_FIRE,
+    CONF_HYSTERESIS,
+    DEFAULT_HYSTERESIS,
+    CONF_MIN_REIGNITION,
+    DEFAULT_MIN_REIGNITION,
+    MAX_MIN_REIGNITION,
     MIN_TARGET_TEMP,
     MAX_TARGET_TEMP,
 )
@@ -34,6 +39,11 @@ from .const import (
 
 def _valid_target(value: float) -> bool:
     return MIN_TARGET_TEMP <= value <= MAX_TARGET_TEMP
+
+
+def _valid_hysteresis(h: float, low: float, full: float) -> bool:
+    """Bands must not overlap: 2h has to fit in the Low and Medium bands."""
+    return h >= 0 and 2 * h <= low and 2 * h <= full - low
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -214,6 +224,19 @@ class MertikOptionsFlow(config_entries.OptionsFlow):
             )
         )
 
+        current_hyst = float(
+            self._entry.options.get(
+                CONF_HYSTERESIS,
+                self._entry.data.get(CONF_HYSTERESIS, DEFAULT_HYSTERESIS),
+            )
+        )
+        current_reign = float(
+            self._entry.options.get(
+                CONF_MIN_REIGNITION,
+                self._entry.data.get(CONF_MIN_REIGNITION, DEFAULT_MIN_REIGNITION),
+            )
+        )
+
         if user_input is not None:
             low = user_input.get(CONF_LOW_THRESHOLD, current_low)
             high = user_input.get(CONF_HIGH_THRESHOLD, current_high)
@@ -226,6 +249,15 @@ class MertikOptionsFlow(config_entries.OptionsFlow):
                 user_input.get(CONF_DEFAULT_TARGET, current_target)
             ):
                 errors[CONF_DEFAULT_TARGET] = "invalid_default_temp"
+            elif not _valid_hysteresis(
+                user_input.get(CONF_HYSTERESIS, current_hyst), low, high
+            ):
+                errors[CONF_HYSTERESIS] = "invalid_hysteresis"
+            elif not (
+                0 <= user_input.get(CONF_MIN_REIGNITION, current_reign)
+                <= MAX_MIN_REIGNITION
+            ):
+                errors[CONF_MIN_REIGNITION] = "invalid_min_reignition"
             else:
                 return self.async_create_entry(title="", data=user_input)
 
@@ -250,6 +282,12 @@ class MertikOptionsFlow(config_entries.OptionsFlow):
                 vol.Optional(CONF_DEFAULT_TARGET, default=current_target): vol.Coerce(
                     float
                 ),
+                vol.Optional(CONF_HYSTERESIS, default=current_hyst): vol.Coerce(
+                    float
+                ),
+                vol.Optional(
+                    CONF_MIN_REIGNITION, default=current_reign
+                ): vol.Coerce(float),
                 vol.Optional(CONF_LIGHT_WITH_FIRE, default=current_light): bool,
             }
         )
