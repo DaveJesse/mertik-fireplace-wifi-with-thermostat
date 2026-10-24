@@ -1,7 +1,6 @@
 """Climate entity -- thermostat setpoint display and thermostatic control logic."""
 
 import logging
-from datetime import datetime
 from typing import Any, TypeVar
 
 from homeassistant.components.climate import (
@@ -14,7 +13,6 @@ from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
-from homeassistant.util import dt as dt_util
 
 from . import MertikConfigEntry
 from .coordinator import MertikDataCoordinator
@@ -31,8 +29,6 @@ from .const import (
     DEFAULT_TARGET_TEMP,
     CONF_HYSTERESIS,
     DEFAULT_HYSTERESIS,
-    CONF_MIN_REIGNITION,
-    DEFAULT_MIN_REIGNITION,
     MIN_TARGET_TEMP,
     MAX_TARGET_TEMP,
     MODE_STANDBY,
@@ -173,9 +169,6 @@ class MertikClimateEntity(MertikEntity, ClimateEntity, RestoreEntity):
         # changes so hysteresis knows where it is; cleared when the fire is
         # switched off or Thermostatic is left).
         self._thermo_mode: str | None = None
-        # When the thermostat last dropped the burner to pilot; re-ignition is
-        # held off until the minimum re-ignition time has passed.
-        self._standby_since: datetime | None = None
         # Previous fire on/off state, used to detect switch-on (off -> on) so
         # the setpoint can be reset to the configured default.
         self._was_on: bool | None = None
@@ -221,12 +214,6 @@ class MertikClimateEntity(MertikEntity, ClimateEntity, RestoreEntity):
     @property
     def _hysteresis(self) -> float:
         return float(self._get_option(CONF_HYSTERESIS, DEFAULT_HYSTERESIS))
-
-    @property
-    def _min_reignition_seconds(self) -> float:
-        return 60.0 * float(
-            self._get_option(CONF_MIN_REIGNITION, DEFAULT_MIN_REIGNITION)
-        )
 
     @property
     def _default_target(self) -> float:
@@ -375,7 +362,6 @@ class MertikClimateEntity(MertikEntity, ClimateEntity, RestoreEntity):
         if self._dataservice.heating_mode != MODE_THERMO:
             self._last_applied_mode = None  # reset when leaving thermo mode
             self._thermo_mode = None
-            self._standby_since = None
             return
 
         current = self._get_current_temperature()
@@ -415,26 +401,6 @@ class MertikClimateEntity(MertikEntity, ClimateEntity, RestoreEntity):
             self._thermo_mode,
         )
 
-        # Minimum time between re-ignitions: once the thermostat has dropped
-        # the burner to pilot, a full (spark) ignition is held off until the
-        # time has passed. While the pilot is still lit the burner relights
-        # from it with no ignition cycle, so there is nothing to protect and
-        # the burner relights at once.
-        if (
-            target_mode != MODE_STANDBY
-            and self._thermo_mode == MODE_STANDBY
-            and self._standby_since is not None
-            and not self._dataservice.is_pilot_on
-        ):
-            waited = (dt_util.utcnow() - self._standby_since).total_seconds()
-            if waited < self._min_reignition_seconds:
-                _LOGGER.debug(
-                    "Thermostatic: %s wanted, re-ignition held for %.0fs more",
-                    target_mode,
-                    self._min_reignition_seconds - waited,
-                )
-                target_mode = MODE_STANDBY
-
         _LOGGER.debug(
             "Thermostatic: sensor=%s current=%.1fC setpoint=%.1fC diff=%.1fC -> %s",
             sensor_id,
@@ -453,7 +419,6 @@ class MertikClimateEntity(MertikEntity, ClimateEntity, RestoreEntity):
         if not self._dataservice.is_on and not self._dataservice._in_standby:
             self._last_applied_mode = None
             self._thermo_mode = None
-            self._standby_since = None
             return
 
         # Only act if the required mode has changed -- prevents sending the
@@ -462,14 +427,6 @@ class MertikClimateEntity(MertikEntity, ClimateEntity, RestoreEntity):
             return
 
         self._last_applied_mode = target_mode
-        # Start the re-ignition timer only when a lit burner drops to pilot,
-        # not when the fire is first armed in an already-warm room.
-        if target_mode == MODE_STANDBY and self._thermo_mode in (
-            MODE_LOW,
-            MODE_MEDIUM,
-            MODE_FULL,
-        ):
-            self._standby_since = dt_util.utcnow()
         self._thermo_mode = target_mode
 
         if target_mode == MODE_STANDBY:

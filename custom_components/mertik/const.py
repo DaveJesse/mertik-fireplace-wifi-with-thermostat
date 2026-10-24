@@ -17,12 +17,9 @@ DEFAULT_TEMP_SENSOR = ""  # empty = use fireplace handset sensor
 CONF_TEMP_STEP = "temperature_step"
 DEFAULT_TEMP_STEP = 0.1
 
-# Thermostatic hysteresis (degrees C) and minimum time between re-ignitions
+# Thermostatic hysteresis (degrees C)
 CONF_HYSTERESIS = "hysteresis"
 DEFAULT_HYSTERESIS = 0.1
-CONF_MIN_REIGNITION = "min_reignition_minutes"
-DEFAULT_MIN_REIGNITION = 2.0
-MAX_MIN_REIGNITION = 60.0
 
 # Switch the fire's light on when the fire is switched on (as the handset does)
 CONF_LIGHT_WITH_FIRE = "light_with_fire"

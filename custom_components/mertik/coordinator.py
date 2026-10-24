@@ -33,6 +33,9 @@ class MertikDataCoordinator(DataUpdateCoordinator[None]):
         # Light-with-fire: armed when the user switches the fire on, fired
         # (light_on_due) on the first update where a flame is seen.
         self._light_with_next_flame: bool = False
+        # Switch-on requested while the fire was still shutting down; carried
+        # out once the device reports the shutdown has finished.
+        self._turn_on_after_shutdown: bool = False
         self.light_on_due: bool = False
         self.fire_just_turned_off: bool = (
             False  # set True for one cycle when fire turns off
@@ -106,6 +109,17 @@ class MertikDataCoordinator(DataUpdateCoordinator[None]):
         """
         from .const import CONF_LIGHT_WITH_FIRE, DEFAULT_LIGHT_WITH_FIRE, MODE_THERMO
 
+        if self.mertik.is_shutting_down:
+            # Commanding the receiver during its shutdown sequence has been
+            # seen to make the WiFi box lose it (F43). Wait for the shutdown
+            # to finish, as the handset does.
+            _LOGGER.info(
+                "Fire is still shutting down; it will be switched on when the "
+                "shutdown has finished"
+            )
+            self._turn_on_after_shutdown = True
+            return
+        self._turn_on_after_shutdown = False
         self._light_with_next_flame = bool(
             self.config_entry.options.get(
                 CONF_LIGHT_WITH_FIRE,
@@ -125,6 +139,7 @@ class MertikDataCoordinator(DataUpdateCoordinator[None]):
     def turn_off(self) -> None:
         """Switch the fire fully off, pilot included (blocking I/O)."""
         self._light_with_next_flame = False
+        self._turn_on_after_shutdown = False
         self.guard_flame_off()
         self.mark_optimistic_off()
 
@@ -413,6 +428,10 @@ class MertikDataCoordinator(DataUpdateCoordinator[None]):
     async def _async_update_data(self) -> None:
         try:
             await self.hass.async_add_executor_job(self.mertik.refresh_status)
+            # A switch-on that arrived during shutdown: carry it out now.
+            if self._turn_on_after_shutdown and not self.mertik.is_shutting_down:
+                _LOGGER.info("Shutdown finished; switching the fire on")
+                await self.hass.async_add_executor_job(self.turn_on)
             # Apply a heating mode deferred until the burner has lit and
             # settled. Sent from the executor: it is blocking socket I/O.
             if (mode := self._pending_mode_due()) is not None:

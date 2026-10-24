@@ -167,13 +167,18 @@ defaults: the burner drops to pilot at 19.6 °C and relights at 19.4 °C.
 
 When the room reaches the setpoint the main burners are extinguished but
 the **pilot flame remains lit**, allowing fast re-ignition when the room
-cools: while the pilot is lit the burner relights from it straight away. If
-the pilot has gone out, a full spark ignition is needed; it is held off until
-the **Minimum time between re-ignitions** (default 2 minutes) has passed since
-the burner dropped to pilot, to limit wear on the igniter. To extinguish the
+cools: the burner relights from the pilot straight away. To extinguish the
 pilot as well, turn off the Fireplace switch.
 
-The thresholds, hysteresis and minimum re-ignition time are adjustable via
+**Switching on while the fire is shutting down** — after the fire is switched
+off, the receiver runs a short shutdown sequence (about 15 seconds), during
+which the MyFire app reports "Ignition is not allowed". If the fire is
+switched on from Home Assistant during it, the request is held and
+carried out as soon as the shutdown has finished; switching off again cancels
+it. Commanding the receiver mid-shutdown was seen to make the WiFi box lose it
+(F43).
+
+The thresholds and hysteresis are adjustable via
 **Settings → Devices & Services → Mertik → Configure**.
 
 **Cold start behaviour** — when the thermostat calls for heat from fully off,
@@ -262,7 +267,6 @@ so the IP does not change.
 | **Thermostat setpoint step** | Increment for the thermostat temperature slider (degrees °C). Default: `0.1`. Must be greater than 0. |
 | **Default target temperature** | See above. |
 | **Hysteresis** | Degrees °C either side of each threshold within which the current mode is kept (see *Thermostatic control*). Default: `0.1`. Twice the value must fit within the Low band and the Medium band. |
-| **Minimum time between re-ignitions** | Minutes after the thermostat has turned the burner down before a full spark ignition is allowed, if the pilot has gone out. With the pilot lit the burner relights at once. Default: `2`. 0–60. |
 | **Switch the light on when the fire is switched on** | On by default, matching the handset. When you switch the fire on from Home Assistant, the fire light comes on at its last brightness as soon as a flame is seen. It is only done once per switch-on, so a light you turn off stays off while the fire cycles. The light can always be switched on and off on its own, with the fire on or off. |
 
 ### Removing the integration

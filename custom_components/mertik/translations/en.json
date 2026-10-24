@@ -131,7 +131,6 @@
           "temperature_step": "Thermostat setpoint step (degrees C)",
           "default_temperature": "Default target temperature (°C, applied each time the fire is switched on)",
           "hysteresis": "Hysteresis (degrees C either side of each threshold)",
-          "min_reignition_minutes": "Minimum time between re-ignitions (minutes)",
           "light_with_fire": "Switch the fire's light on when the fire is switched on"
         }
       }
@@ -140,8 +139,7 @@
       "invalid_thresholds": "Thresholds must be positive numbers, and the Low threshold must be less than the Full threshold.",
       "invalid_temp_step": "Setpoint step must be a positive number.",
       "invalid_default_temp": "Default target temperature must be between 5 and 36 °C.",
-      "invalid_hysteresis": "Hysteresis must be 0 or more, and twice it must fit within the Low band (Low threshold) and the Medium band (Full threshold minus Low threshold).",
-      "invalid_min_reignition": "Minimum time between re-ignitions must be between 0 and 60 minutes."
+      "invalid_hysteresis": "Hysteresis must be 0 or more, and twice it must fit within the Low band (Low threshold) and the Medium band (Full threshold minus Low threshold)."
     }
   }
 }
