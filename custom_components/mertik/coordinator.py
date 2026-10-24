@@ -219,6 +219,11 @@ class MertikDataCoordinator(DataUpdateCoordinator[None]):
     def fault_code(self) -> int:
         return self.mertik.fault_code
 
+    def consume_fire_turned_off(self) -> bool:
+        """Return True once after the fire has gone out (light went off too)."""
+        off, self.fire_just_turned_off = self.fire_just_turned_off, False
+        return off
+
     def consume_light_on_due(self) -> bool:
         """Return True once when the light should come on with the fire."""
         due, self.light_on_due = self.light_on_due, False

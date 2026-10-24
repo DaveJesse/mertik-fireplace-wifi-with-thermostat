@@ -296,7 +296,10 @@ class MertikClimateEntity(MertikEntity, ClimateEntity, RestoreEntity):
         step = self.target_temperature_step
         snapped = round(round(float(temp) / step) * step, 2)
         self._target_temp = max(MIN_TEMP, min(MAX_TEMP_C, snapped))
-        self._last_applied_mode = None  # force re-evaluation on next poll
+        # Re-check now against the new setpoint. Do not clear
+        # _last_applied_mode: a command is only sent if the mode actually
+        # changes (re-sending the same mode makes the fire beep).
+        self._run_thermostatic_logic()
         self.async_write_ha_state()
         _LOGGER.debug("Thermostat setpoint -> %.1f C", self._target_temp)
 

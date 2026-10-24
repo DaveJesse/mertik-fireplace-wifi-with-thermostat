@@ -7,10 +7,13 @@ On HA startup the on/off state and brightness are restored from the previous
 session via RestoreEntity. Nothing is sent to the device at startup: commands
 only follow a user action.
 
-When the fire is extinguished, the device physically turns the light off.
-The entity detects this via the coordinator's fire_just_turned_off flag
-and resets _is_on accordingly, but retains the brightness level so the
-light can be turned back on at the same level.
+The fire acts as a trigger for the light in both directions:
+- switched on from HA: the light is switched on once a flame is seen
+  (option "light_with_fire"), as the handset does;
+- extinguished (by any means): the device turns the light off itself, so the
+  entity is set to off without sending anything. Brightness is kept so the
+  light comes back at the same level.
+The light can always be switched on and off on its own, fire on or off.
 """
 
 from typing import Any
@@ -72,11 +75,7 @@ class MertikLightEntity(MertikEntity, LightEntity, RestoreEntity):
                 self._brightness = last_state.attributes[ATTR_BRIGHTNESS]
 
     async def _restore_light(self) -> None:
-        """Send light on at the current brightness.
-
-        Used when the fire is switched on (light-with-fire) and to re-send
-        light on after the device auto-killed it when the fire turned off.
-        """
+        """Send light on at the current brightness (light-with-fire)."""
         await self.hass.async_add_executor_job(self._dataservice.light_on)
         await self.hass.async_add_executor_job(
             self._dataservice.set_light_brightness, self._brightness
@@ -86,17 +85,14 @@ class MertikLightEntity(MertikEntity, LightEntity, RestoreEntity):
 
     @callback
     def _handle_coordinator_update(self) -> None:
-        """Called on every coordinator poll.
-        If the fire just turned off, the device also turned the light off.
-        We immediately re-send the light on command at the saved brightness
-        so the light stays on independently of the fire state.
-        """
+        """Follow the fire: light on with the fire, off when it goes out."""
+        if self._dataservice.consume_fire_turned_off():
+            # The device switches the light off with the fire; just reflect it.
+            self._is_on = False
         if self._dataservice.consume_light_on_due():
             # Fire has just been switched on and lit: light on, as the
             # handset does (option "light_with_fire").
             self._is_on = True
-            self.hass.async_create_task(self._restore_light())
-        elif self._dataservice.fire_just_turned_off and self._is_on:
             self.hass.async_create_task(self._restore_light())
         super()._handle_coordinator_update()
 

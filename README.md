@@ -29,7 +29,7 @@ See [PROTOCOL.md](PROTOCOL.md) for full wire-level documentation.
 | Aux / rear burner | ✅ (broken) | ✅ fixed |
 | Temperature sensor | ✅ (broken) | ✅ fixed |
 | APP mode handshake | ❌ | ✅ |
-| Light stays on when fire turns off | ❌ | ✅ |
+| Light follows the fire (on with the fire, off when it goes out) | ❌ | ✅ |
 | Heating mode selector | ❌ | ✅ |
 | Thermostatic control | ❌ | ✅ |
 | Selectable external temperature sensor | ❌ | ✅ |
@@ -58,7 +58,7 @@ ITALKERO, Signi, SAFIRE, attika, Ortal, and Fire Connects.
 | Fireplace | Switch | Main on/off |
 | Heating Mode | Select | Standby / Full Heat / Medium Heat / Low Heat / Thermostatic |
 | Thermostat | Climate | The whole control panel: Heat/Off, heating mode presets (Low, Medium, Full, Thermostatic), target and measured room temperature, and heating/idle status |
-| Light | Light | Dimmable; stays on when fire is turned off |
+| Light | Light | Dimmable. Comes on when the fire is switched on (optional) and goes off when the fire goes out; can also be switched on its own |
 | Aux Burner | Binary sensor | Read-only: shows whether the rear / second burner is lit (set by the heating mode) |
 | Flame Height | Sensor | Read-only: current flame step, 0 when the fire is off (set by the heating mode) |
 | Handset Temperature | Sensor | Room temperature from the paired handset. Hidden automatically when another temperature sensor is selected. |
@@ -308,10 +308,10 @@ The integration sends `aux_on` immediately after ignite so the Aux Burner
 indicator shows On; the heating mode then turns it off if not needed.
 
 **Light when fire turns off** — The device physically extinguishes the light
-when the fire is turned off. The integration detects this and immediately
-re-sends the light on command at the previous brightness, so the light
-remains on. If you want the light to go off with the fire, turn it off
-manually before turning off the fire.
+when the fire is turned off (from Home Assistant, the handset or the app).
+The integration detects this and shows the light as off, without sending
+anything. Its brightness is kept, so the light comes back at the same level.
+The light can be switched on again on its own with the fire off.
 
 **Handset APP mode** — The handset shows "APP" only when specific conditions
 are met. Controls work correctly regardless of whether "APP" is displayed.
