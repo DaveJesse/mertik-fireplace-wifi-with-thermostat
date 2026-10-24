@@ -41,6 +41,10 @@
     "receiver_lost": {
       "title": "{name}: WiFi-boksen kan ikke nå pejsen (F43)",
       "description": "myfire WiFi-boksen er online, men har mistet radioforbindelsen til pejsens modtager, så Home Assistants kommandoer kan ikke nå pejsen. Fjernbetjeningen virker muligvis stadig.\n\nSluk for strømmen til pejsen i 30 sekunder, og tænd igen. Hvis MyFire-appen stadig viser F43 \"No receiver connected\", skal WiFi-boksen parres med modtageren igen efter boksens vejledning. Denne advarsel forsvinder af sig selv, når forbindelsen er genoprettet."
+    },
+    "not_responding": {
+      "title": "{name}: WiFi-boksen svarer ikke",
+      "description": "myfire WiFi-boksen har ikke svaret på nogen kommando i 30 sekunder, så Home Assistant kan ikke styre pejsen. MyFire-appen viser som regel samtidig, at signalet er mistet.\n\nBetjening af pejsen med fjernbetjeningen genopretter ofte forbindelsen. Hvis ikke, så sluk for strømmen til pejsen i 30 sekunder og tænd igen, og kontrollér modtagerens strømforsyning eller batterier. Denne advarsel forsvinder af sig selv, når boksen svarer igen."
     }
   },
   "exceptions": {

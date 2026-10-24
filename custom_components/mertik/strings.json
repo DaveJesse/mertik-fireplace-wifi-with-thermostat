@@ -41,6 +41,10 @@
     "receiver_lost": {
       "title": "{name}: WiFi box cannot reach the fireplace (F43)",
       "description": "The myfire WiFi box is online but has lost its radio link to the fireplace receiver, so Home Assistant's commands cannot reach the fire. The handset may still work.\n\nSwitch the fireplace's power off for 30 seconds and back on. If the MyFire app still shows F43 \"No receiver connected\", re-pair the WiFi box with the receiver following the box's instructions. This alert clears by itself once the link is restored."
+    },
+    "not_responding": {
+      "title": "{name}: WiFi box is not responding",
+      "description": "The myfire WiFi box has not answered any command for 30 seconds, so Home Assistant cannot control the fire. The MyFire app usually shows a loss of signal at the same time.\n\nOperating the fire with the handset often restores the link. If not, switch the fireplace's power off for 30 seconds and back on, and check the receiver's power supply or batteries. This alert clears by itself once the box replies again."
     }
   },
   "exceptions": {

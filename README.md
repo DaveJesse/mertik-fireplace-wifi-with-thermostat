@@ -368,6 +368,16 @@ are met. Controls work correctly regardless of whether "APP" is displayed.
 
 ---
 
+### "WiFi box is not responding" alert
+
+**Symptom:** The controls show as unavailable and **Settings → Repairs** shows "WiFi box is not responding". The MyFire app usually shows a loss of signal at the same time.
+
+**Description:** The WiFi box has not answered any command for 30 seconds.
+
+**Resolution:** Operating the fire with the handset often restores the link. If not, switch the fireplace's power off for 30 seconds and back on, and check the receiver's power supply or batteries. The alert clears by itself once the box replies again.
+
+---
+
 ### Fault Code sensor shows F43 — WiFi box cannot reach the fireplace
 
 **Symptom:** The fire does not respond to Home Assistant (no beeps, light does not change), the Fireplace switch and Thermostat show as unavailable, and **Settings → Repairs** shows "WiFi box cannot reach the fireplace (F43)". The MyFire app shows F43 "No receiver connected". The handset may still work.

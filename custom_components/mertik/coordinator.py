@@ -230,6 +230,16 @@ class MertikDataCoordinator(DataUpdateCoordinator[None]):
         return due
 
     @property
+    def not_responding(self) -> bool:
+        """True while the WiFi box is not replying at all."""
+        return self.mertik.not_responding
+
+    @property
+    def light_reported(self) -> bool | None:
+        """Light on/off from the latest status packet (None = unknown)."""
+        return self.mertik.light_reported
+
+    @property
     def receiver_lost(self) -> bool:
         """True while the WiFi box reports no link to the fireplace (F43)."""
         return self.mertik.receiver_lost
@@ -416,6 +426,19 @@ class MertikDataCoordinator(DataUpdateCoordinator[None]):
                 )
             else:
                 ir.async_delete_issue(self.hass, DOMAIN, issue_id)
+            silent_id = f"not_responding_{self.config_entry.entry_id}"
+            if self.mertik.not_responding:
+                ir.async_create_issue(
+                    self.hass,
+                    DOMAIN,
+                    silent_id,
+                    is_fixable=False,
+                    severity=ir.IssueSeverity.ERROR,
+                    translation_key="not_responding",
+                    translation_placeholders={"name": self.config_entry.title},
+                )
+            else:
+                ir.async_delete_issue(self.hass, DOMAIN, silent_id)
             # Light-with-fire: once a flame (pilot or burner) is seen after the
             # user switched the fire on, ask the light entity to switch on.
             if self._light_with_next_flame and (

@@ -1,7 +1,7 @@
 """Light entity for Mertik Maxitrol fireplace.
 
-Light on/off and brightness are tracked locally (fully optimistic).
-The status packet is unreliable for light state.
+Brightness is tracked locally. On/off follows the light byte in the status
+packet when one arrives, and is otherwise assumed from the last command.
 
 On HA startup the on/off state and brightness are restored from the previous
 session via RestoreEntity. Nothing is sent to the device at startup: commands
@@ -14,8 +14,13 @@ The fire acts as a trigger for the light in both directions:
   entity is set to off without sending anything. Brightness is kept so the
   light comes back at the same level.
 The light can always be switched on and off on its own, fire on or off.
+
+The fireplace reports the light in every status packet (on/off), so changes
+made with the handset or the MyFire app are followed too; just after HA sends
+a light command the report is ignored briefly (REPORT_GRACE_SECONDS).
 """
 
+import time
 from typing import Any
 
 from homeassistant.components.light import ATTR_BRIGHTNESS, ColorMode, LightEntity
@@ -31,6 +36,9 @@ from .entity import MertikEntity
 PARALLEL_UPDATES = 1
 
 DEFAULT_BRIGHTNESS = 128
+# After HA sends a light command, ignore the reported light state for this
+# long, so a status packet from before the command cannot undo it.
+REPORT_GRACE_SECONDS = 15.0
 
 
 async def async_setup_entry(
@@ -60,6 +68,7 @@ class MertikLightEntity(MertikEntity, LightEntity, RestoreEntity):
         self._attr_unique_id = entry_id + "-Light"
         self._is_on = False
         self._brightness = DEFAULT_BRIGHTNESS
+        self._last_command = 0.0  # time.monotonic() of our last light command
 
     async def async_added_to_hass(self) -> None:
         """Restore the last known on/off state and brightness.
@@ -76,6 +85,7 @@ class MertikLightEntity(MertikEntity, LightEntity, RestoreEntity):
 
     async def _restore_light(self) -> None:
         """Send light on at the current brightness (light-with-fire)."""
+        self._last_command = time.monotonic()
         await self.hass.async_add_executor_job(self._dataservice.light_on)
         await self.hass.async_add_executor_job(
             self._dataservice.set_light_brightness, self._brightness
@@ -85,7 +95,15 @@ class MertikLightEntity(MertikEntity, LightEntity, RestoreEntity):
 
     @callback
     def _handle_coordinator_update(self) -> None:
-        """Follow the fire: light on with the fire, off when it goes out."""
+        """Follow the fireplace's reported light state and the fire."""
+        reported = self._dataservice.light_reported
+        if (
+            reported is not None
+            and reported != self._is_on
+            and time.monotonic() - self._last_command > REPORT_GRACE_SECONDS
+        ):
+            # Switched by the handset, the MyFire app or the fire itself.
+            self._is_on = reported
         if self._dataservice.consume_fire_turned_off():
             # The device switches the light off with the fire; just reflect it.
             self._is_on = False
@@ -105,6 +123,7 @@ class MertikLightEntity(MertikEntity, LightEntity, RestoreEntity):
         return self._brightness
 
     async def async_turn_on(self, **kwargs: Any) -> None:
+        self._last_command = time.monotonic()
         # The light state is assumed (restored, never reported by the device),
         # so always send light_on: the light may be off even if we think it is
         # on, and a brightness command alone does not switch it on.
@@ -119,6 +138,7 @@ class MertikLightEntity(MertikEntity, LightEntity, RestoreEntity):
         self._dataservice.async_set_updated_data(None)
 
     async def async_turn_off(self, **kwargs: Any) -> None:
+        self._last_command = time.monotonic()
         self._is_on = False
         self.async_write_ha_state()
         await self.hass.async_add_executor_job(self._dataservice.light_off)

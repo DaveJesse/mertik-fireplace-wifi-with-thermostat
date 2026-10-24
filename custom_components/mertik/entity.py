@@ -25,9 +25,16 @@ class MertikEntity(CoordinatorEntity[MertikDataCoordinator]):
 
     @property
     def available(self) -> bool:
-        """Unavailable while the WiFi box cannot reach the fireplace (F43).
+        """Unavailable while the fireplace cannot be reached.
+
+        Either the WiFi box reports no link to the receiver (F43), or it is
+        not replying at all.
 
         Commands would not reach the fire and the reported state would be
         stale, so showing the entity as usable would be misleading.
         """
-        return super().available and not self._dataservice.receiver_lost
+        return (
+            super().available
+            and not self._dataservice.receiver_lost
+            and not self._dataservice.not_responding
+        )

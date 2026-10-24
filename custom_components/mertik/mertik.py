@@ -18,6 +18,11 @@ FCODE_RECEIVER_LOST = 43
 # this long (three 10 s polls). The box can send an occasional stray one in
 # normal use; a real loss of link repeats it for every command.
 RECEIVER_LOST_AFTER_SECONDS = 30.0
+# Report "not responding" once the box has sent nothing at all for this long
+# (every command timing out). Seen when the box loses the fireplace entirely.
+NOT_RESPONDING_AFTER_SECONDS = 30.0
+# Shortest text that holds every status field we read (up to room temp [34:36]).
+MIN_STATUS_LEN = 36
 TCP_PORT = 2000
 SOCKET_TIMEOUT = 3
 RECV_BUFFER = 4096
@@ -72,6 +77,10 @@ STATUS_MODE_BYTE = slice(24, 26)
 STATUS_HANDSET_FAULT = slice(28, 30)  # 0x00=OK, 0x06=F44 (handset disconnected)
 STATUS_INTERNAL_TEMP = slice(30, 32)  # near-firebox sensor, ~10°C, not useful
 STATUS_AMBIENT_TEMP = slice(34, 36)  # actual room temperature
+# Light: "00" when off, otherwise the brightness code (the same code sent with
+# CMD_BRIGHTNESS_PREFIX, e.g. "AA", "BB"). Confirmed from captures: follows the
+# handset and HA, with the fire lit or out.
+STATUS_LIGHT = slice(20, 22)
 
 # Maps raw handset-fault byte values to Mertik F-code numbers.
 # The byte at STATUS_HANDSET_FAULT (position [28:30]) encodes handset errors
@@ -113,6 +122,11 @@ class Mertik:
         # time.monotonic() of the first "no receiver" reply since the last
         # status packet, or None. See receiver_lost.
         self._no_receiver_since: float | None = None
+        # Light on/off as reported in the latest status packet (None = not yet
+        # seen). See STATUS_LIGHT.
+        self.light_reported: bool | None = None
+        # time.monotonic() of the last reply of any kind from the box.
+        self._last_reply = time.monotonic()
 
         self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.client.settimeout(SOCKET_TIMEOUT)
@@ -161,6 +175,11 @@ class Mertik:
         if self._no_receiver_since is None:
             return False
         return time.monotonic() - self._no_receiver_since >= RECEIVER_LOST_AFTER_SECONDS
+
+    @property
+    def not_responding(self) -> bool:
+        """True once the box has not replied to anything for a while."""
+        return time.monotonic() - self._last_reply >= NOT_RESPONDING_AFTER_SECONDS
 
     @property
     def is_pilot_on(self) -> bool:
@@ -344,20 +363,37 @@ class Mertik:
             except (socket.error, socket.timeout):
                 return
 
+        self._last_reply = time.monotonic()
         _LOGGER.debug("RAW RESPONSE hex=%s", data.hex())
         self._parse_any_status(data)
 
     def _parse_any_status(self, data: bytes) -> None:
-        """Find and parse a status packet anywhere in received data."""
+        """Parse the newest complete status packet in the received data.
+
+        One read can hold several packets (STX ... ETX), including older
+        status packets, light notifications and "no receiver" replies. The
+        last complete status packet is the most recent state.
+        """
         text = data.decode("ascii", errors="replace")
-        for prefix in STATUS_PREFIXES:
-            idx = text.find(prefix)
-            if idx != -1:
-                if self.receiver_lost:
-                    _LOGGER.info("Fireplace receiver link restored")
-                self._no_receiver_since = None
-                self._process_status(text[idx:])
-                return
+        packets = [chunk.split("\x02")[-1] for chunk in text.split("\x03")]
+        statuses = [
+            pkt
+            for pkt in packets
+            if pkt.startswith(STATUS_PREFIXES) and len(pkt) >= MIN_STATUS_LEN
+        ]
+        if not statuses:
+            # Fall back to a status packet that is not cleanly framed.
+            for prefix in STATUS_PREFIXES:
+                idx = text.find(prefix)
+                if idx != -1 and len(text) - idx >= MIN_STATUS_LEN:
+                    statuses = [text[idx:]]
+                    break
+        if statuses:
+            if self.receiver_lost:
+                _LOGGER.info("Fireplace receiver link restored")
+            self._no_receiver_since = None
+            self._process_status(statuses[-1])
+            return
         if RECEIVER_LOST_PREFIX in text:
             _LOGGER.debug("WiFi box replied 'no receiver' (E1): %s", data.hex())
             if self._no_receiver_since is None:
@@ -370,6 +406,10 @@ class Mertik:
 
         if len(status_str) < 32:
             return
+
+        light = status_str[STATUS_LIGHT]
+        if all(c in "0123456789ABCDEF" for c in light):
+            self.light_reported = light != "00"
 
         # ON/OFF flag (reliable)
         on_flag = status_str[STATUS_ON_FLAG]
