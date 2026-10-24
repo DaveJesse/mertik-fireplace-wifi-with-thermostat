@@ -143,8 +143,8 @@ characters as pairs of hex digits at these offsets:
 | [12:14] | Config byte | — | Constant per device (e.g. `C6`) |
 | [14:16] | ON flag | `FF`=on, `00`=off | Transitional values during ignition |
 | [16:20] | Status bits | 16-bit big-endian | See bit table below |
-| [18:20] | Flame byte | raw value | `>0x7B` = burner running |
-| [20:22] | Light byte | — | `0xCC` constant on B6R-H8TV4PB; not used |
+| [18:20] | Flame byte | raw value | `>0x7B` = flame present; top bit (`0x80`) set whenever a flame (pilot or burner) is burning, clear when fully out. Does not distinguish pilot from burner |
+| [20:22] | Light byte | — | `00` = light off; otherwise the brightness code (same codes as the brightness command, e.g. `AA`, `BB`). Follows the handset and the app, with the fire lit or out (confirmed by capture). Some installations report a constant `CC` |
 | [22:24] | Constant | — | Always `04`; purpose unknown |
 | [24:26] | Mode byte | — | `00`=manual, `20`=thermostatic active |
 | [26:28] | Unknown | — | Always `00` in observed packets |
@@ -158,11 +158,25 @@ characters as pairs of hex digits at these offsets:
 
 | Bit | Meaning |
 |-----|---------|
-| 7 | Shutting down |
+| 7 | Shutting down — set for roughly 15–30 s after the fire is switched off; the MyFire app reports "Ignition is not allowed" meanwhile. Commanding ignition during it was seen to make the WiFi box lose the receiver (F43) |
 | 8 | Guard / pilot flame on |
 | 9 | Aux / rear burner on |
 | 11 | Igniting |
 | 13 | Light on (reliable only when fire is running) |
+
+### Other replies
+
+| Reply (ASCII, between STX and ETX) | Meaning |
+|---|---|
+| `3030303000E101` | "No receiver": the WiFi box has lost its radio link to the fireplace receiver (the MyFire app shows F43). An occasional stray one is normal; a continuous stream means the link is down |
+| `30303030003001xx` / `30303030003000xx` | Light switched on / off (xx = brightness code), sent unprompted when the light is switched with the handset |
+| `303030300016`, `303030300010`, `30303030002001` … | Acknowledgements echoing the command just received (standby, guard flame off, aux on …) |
+
+A single read can contain several of these together with one or more status
+packets; the most recent complete status packet describes the current state.
+
+If the box stops answering altogether (every command times out), it has also
+lost the fireplace; operating the fire with the handset usually restores it.
 
 ### Flame byte interpretation
 

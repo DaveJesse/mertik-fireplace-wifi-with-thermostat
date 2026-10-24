@@ -26,7 +26,8 @@
     "error": {
       "cannot_connect": "Unable to connect to the fireplace WiFi box. Check the IP address and that the device is powered on and connected to your network.",
       "invalid_thresholds": "Thresholds must be positive numbers, and the Low threshold must be less than the Full threshold.",
-      "invalid_default_temp": "Default target temperature must be between 5 and 36 °C."
+      "invalid_default_temp": "Default target temperature must be between 5 and 36 °C.",
+      "already_configured": "Another fireplace is already set up with this IP address."
     },
     "abort": {
       "already_configured": "This fireplace is already configured.",

@@ -33,7 +33,9 @@ See [PROTOCOL.md](PROTOCOL.md) for full wire-level documentation.
 | Heating mode selector | ❌ | ✅ |
 | Thermostatic control | ❌ | ✅ |
 | Selectable external temperature sensor | ❌ | ✅ |
-| Adjustable thermostat thresholds | ❌ | ✅ |
+| Adjustable thermostat thresholds and hysteresis | ❌ | ✅ |
+| Complete control panel on the standard Thermostat card | ❌ | ✅ |
+| Fault alerts (F43, F44, WiFi box not responding) | ❌ | ✅ |
 
 ---
 
@@ -214,13 +216,15 @@ instead and thermostatic control continues unaffected by the handset fault.
 
 ## Data updates
 
-The integration communicates with the fireplace over a **direct local TCP connection** (port 2000) with no cloud dependency. There is no push notification mechanism — the device does not send unsolicited updates.
+The integration communicates with the fireplace over a **direct local TCP connection** (port 2000) with no cloud dependency. The device sends some notifications of its own (for example when the light is switched with the handset), but the integration does not rely on them: it polls.
 
 HA **polls the device every 10 seconds** by sending a status request and parsing the response. Each poll refreshes:
 
 - On/off state and flame status
 - Ignition and shutdown flags
+- Light on/off (so changes made with the handset or the MyFire app are followed)
 - Ambient temperature (from the handset sensor)
+- Fault state (F43 / F44)
 
 The 10-second interval is chosen for two reasons:
 1. **Thermostatic control** — the control loop runs on every poll and must react to temperature changes promptly to avoid overshooting the target.
@@ -353,7 +357,7 @@ are met. Controls work correctly regardless of whether "APP" is displayed.
 1. Confirm the integration is set up and the config entry is loaded (not in a failed state).
 2. Power-cycle the myfire WiFi box (unplug it from the fireplace for 10 seconds).
 3. Check the HA log (`Settings → System → Logs`) for connection errors referencing the fireplace IP.
-4. Verify only one client is connected to the box at a time — the myfire mobile app and this integration cannot be connected simultaneously.
+4. If problems persist, close the MyFire app on all phones and tablets and try again; the app and the integration usually work side by side, but the box handles one connection best.
 
 ---
 
@@ -425,7 +429,7 @@ This is not a fault. If you want the fire to stay at a fixed output rather than 
 
 ---
 
-
+## Safety
 
 This integration controls a gas appliance. Use at your own risk. The authors
 accept no responsibility for any damage or injury. Always ensure your

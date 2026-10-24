@@ -26,7 +26,8 @@
     "error": {
       "cannot_connect": "Kan ikke oprette forbindelse til pejsens WiFi-boks. Kontrollér IP-adressen, og sørg for, at enheden er tændt og forbundet til dit netværk.",
       "invalid_thresholds": "Tærsklerne skal være positive tal, og tærsklen for Lav skal være mindre end tærsklen for Fuld.",
-      "invalid_default_temp": "Standard måltemperatur skal være mellem 5 og 36 °C."
+      "invalid_default_temp": "Standard måltemperatur skal være mellem 5 og 36 °C.",
+      "already_configured": "En anden pejs er allerede sat op med denne IP-adresse."
     },
     "abort": {
       "already_configured": "Denne pejs er allerede konfigureret.",
