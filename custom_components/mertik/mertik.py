@@ -127,6 +127,9 @@ class Mertik:
         self.light_reported: bool | None = None
         # time.monotonic() of the last reply of any kind from the box.
         self._last_reply = time.monotonic()
+        # Number of status packets processed (lets callers tell whether a
+        # status has arrived since some event).
+        self.status_count = 0
 
         self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.client.settimeout(SOCKET_TIMEOUT)
@@ -406,6 +409,7 @@ class Mertik:
 
         if len(status_str) < 32:
             return
+        self.status_count += 1
 
         light = status_str[STATUS_LIGHT]
         if all(c in "0123456789ABCDEF" for c in light):
