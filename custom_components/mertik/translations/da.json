@@ -125,7 +125,8 @@
           "low_threshold": "Tærskel for lav varme (grader C under indstillet temperatur)",
           "high_threshold": "Tærskel for fuld varme (grader C under indstillet temperatur, skal være større end Lav)",
           "temperature_step": "Trin for indstillet temperatur (grader C)",
-          "default_temperature": "Standard måltemperatur (°C, bruges hver gang pejsen tændes)"
+          "default_temperature": "Standard måltemperatur (°C, bruges hver gang pejsen tændes)",
+          "light_with_fire": "Tænd pejsens lys, når pejsen tændes"
         }
       }
     },

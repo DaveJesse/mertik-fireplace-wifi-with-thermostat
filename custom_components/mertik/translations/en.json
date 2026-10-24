@@ -125,7 +125,8 @@
           "low_threshold": "Low heat threshold (degrees C below setpoint)",
           "high_threshold": "Full heat threshold (degrees C below setpoint, must be greater than Low)",
           "temperature_step": "Thermostat setpoint step (degrees C)",
-          "default_temperature": "Default target temperature (°C, applied each time the fire is switched on)"
+          "default_temperature": "Default target temperature (°C, applied each time the fire is switched on)",
+          "light_with_fire": "Switch the fire's light on when the fire is switched on"
         }
       }
     },

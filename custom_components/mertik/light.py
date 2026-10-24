@@ -72,7 +72,11 @@ class MertikLightEntity(MertikEntity, LightEntity, RestoreEntity):
                 self._brightness = last_state.attributes[ATTR_BRIGHTNESS]
 
     async def _restore_light(self) -> None:
-        """Re-send light on after the device auto-killed it when fire turned off."""
+        """Send light on at the current brightness.
+
+        Used when the fire is switched on (light-with-fire) and to re-send
+        light on after the device auto-killed it when the fire turned off.
+        """
         await self.hass.async_add_executor_job(self._dataservice.light_on)
         await self.hass.async_add_executor_job(
             self._dataservice.set_light_brightness, self._brightness
@@ -87,7 +91,12 @@ class MertikLightEntity(MertikEntity, LightEntity, RestoreEntity):
         We immediately re-send the light on command at the saved brightness
         so the light stays on independently of the fire state.
         """
-        if self._dataservice.fire_just_turned_off and self._is_on:
+        if self._dataservice.consume_light_on_due():
+            # Fire has just been switched on and lit: light on, as the
+            # handset does (option "light_with_fire").
+            self._is_on = True
+            self.hass.async_create_task(self._restore_light())
+        elif self._dataservice.fire_just_turned_off and self._is_on:
             self.hass.async_create_task(self._restore_light())
         super()._handle_coordinator_update()
 

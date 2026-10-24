@@ -249,6 +249,7 @@ so the IP does not change.
 | **Full Heat threshold** | See above. Can be adjusted without restarting HA. |
 | **Thermostat setpoint step** | Increment for the thermostat temperature slider (degrees °C). Default: `0.1`. Must be greater than 0. |
 | **Default target temperature** | See above. |
+| **Switch the light on when the fire is switched on** | On by default, matching the handset. When you switch the fire on from Home Assistant, the fire light comes on at its last brightness as soon as a flame is seen. It is only done once per switch-on, so a light you turn off stays off while the fire cycles. The light can always be switched on and off on its own, with the fire on or off. |
 
 ### Removing the integration
 

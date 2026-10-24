@@ -17,6 +17,10 @@ DEFAULT_TEMP_SENSOR = ""  # empty = use fireplace handset sensor
 CONF_TEMP_STEP = "temperature_step"
 DEFAULT_TEMP_STEP = 0.1
 
+# Switch the fire's light on when the fire is switched on (as the handset does)
+CONF_LIGHT_WITH_FIRE = "light_with_fire"
+DEFAULT_LIGHT_WITH_FIRE = True
+
 # Default thermostat target temperature, applied each time the fire is switched on
 CONF_DEFAULT_TARGET = "default_temperature"
 DEFAULT_TARGET_TEMP = 20.0

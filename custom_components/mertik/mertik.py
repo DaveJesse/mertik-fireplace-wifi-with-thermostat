@@ -146,6 +146,11 @@ class Mertik:
         return self.flame_on
 
     @property
+    def is_pilot_on(self) -> bool:
+        """Guard (pilot) flame lit, from the status bits."""
+        return self._guard_flame_on
+
+    @property
     def is_aux_on(self) -> bool:
         """Aux state tracked locally from commands (status bit unreliable)."""
         return self._local_aux and self.flame_on

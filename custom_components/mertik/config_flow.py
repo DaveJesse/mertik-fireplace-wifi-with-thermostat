@@ -25,6 +25,8 @@ from .const import (
     CONF_DEFAULT_TARGET,
     DEFAULT_TARGET_TEMP,
     DEFAULT_NAME,
+    CONF_LIGHT_WITH_FIRE,
+    DEFAULT_LIGHT_WITH_FIRE,
     MIN_TARGET_TEMP,
     MAX_TARGET_TEMP,
 )
@@ -205,6 +207,13 @@ class MertikOptionsFlow(config_entries.OptionsFlow):
             )
         )
 
+        current_light = bool(
+            self._entry.options.get(
+                CONF_LIGHT_WITH_FIRE,
+                self._entry.data.get(CONF_LIGHT_WITH_FIRE, DEFAULT_LIGHT_WITH_FIRE),
+            )
+        )
+
         if user_input is not None:
             low = user_input.get(CONF_LOW_THRESHOLD, current_low)
             high = user_input.get(CONF_HIGH_THRESHOLD, current_high)
@@ -241,6 +250,7 @@ class MertikOptionsFlow(config_entries.OptionsFlow):
                 vol.Optional(CONF_DEFAULT_TARGET, default=current_target): vol.Coerce(
                     float
                 ),
+                vol.Optional(CONF_LIGHT_WITH_FIRE, default=current_light): bool,
             }
         )
         return self.async_show_form(

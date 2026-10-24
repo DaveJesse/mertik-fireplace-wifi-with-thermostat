@@ -30,6 +30,10 @@ class MertikDataCoordinator(DataUpdateCoordinator[None]):
         self._optimistic_on_until: datetime | None = None
         self._optimistic_off_until: datetime | None = None
         self._prev_is_on: bool = False
+        # Light-with-fire: armed when the user switches the fire on, fired
+        # (light_on_due) on the first update where a flame is seen.
+        self._light_with_next_flame: bool = False
+        self.light_on_due: bool = False
         self.fire_just_turned_off: bool = (
             False  # set True for one cycle when fire turns off
         )
@@ -100,8 +104,16 @@ class MertikDataCoordinator(DataUpdateCoordinator[None]):
         Thermostatic: light the pilot and let the thermostat decide whether to
         ignite the burner. Any other mode: ignite and apply that mode.
         """
-        from .const import MODE_THERMO
+        from .const import CONF_LIGHT_WITH_FIRE, DEFAULT_LIGHT_WITH_FIRE, MODE_THERMO
 
+        self._light_with_next_flame = bool(
+            self.config_entry.options.get(
+                CONF_LIGHT_WITH_FIRE,
+                self.config_entry.data.get(
+                    CONF_LIGHT_WITH_FIRE, DEFAULT_LIGHT_WITH_FIRE
+                ),
+            )
+        )
         mode = self._heating_mode
         if mode == MODE_THERMO:
             self.arm_thermostatic()
@@ -112,6 +124,7 @@ class MertikDataCoordinator(DataUpdateCoordinator[None]):
 
     def turn_off(self) -> None:
         """Switch the fire fully off, pilot included (blocking I/O)."""
+        self._light_with_next_flame = False
         self.guard_flame_off()
         self.mark_optimistic_off()
 
@@ -205,6 +218,11 @@ class MertikDataCoordinator(DataUpdateCoordinator[None]):
     @property
     def fault_code(self) -> int:
         return self.mertik.fault_code
+
+    def consume_light_on_due(self) -> bool:
+        """Return True once when the light should come on with the fire."""
+        due, self.light_on_due = self.light_on_due, False
+        return due
 
     @property
     def receiver_lost(self) -> bool:
@@ -393,6 +411,13 @@ class MertikDataCoordinator(DataUpdateCoordinator[None]):
                 )
             else:
                 ir.async_delete_issue(self.hass, DOMAIN, issue_id)
+            # Light-with-fire: once a flame (pilot or burner) is seen after the
+            # user switched the fire on, ask the light entity to switch on.
+            if self._light_with_next_flame and (
+                self.mertik.is_flame_on or self.mertik.is_pilot_on
+            ):
+                self._light_with_next_flame = False
+                self.light_on_due = True
             # Detect when fire turns off so light entity can reset its state.
             # The device physically turns the light off when fire is extinguished.
             current_on = self.is_on
