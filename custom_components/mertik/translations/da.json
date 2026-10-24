@@ -37,6 +37,10 @@
     "cannot_connect": {
       "title": "Kan ikke oprette forbindelse til Mertik Maxitrol-pejsen",
       "description": "Home Assistant kan ikke nå pejsens WiFi-boks på {host}. Kontrollér, at enheden er tændt og forbundet til dit netværk. Hvis IP-adressen er ændret, kan du bruge **Omkonfigurer** til at opdatere den."
+    },
+    "receiver_lost": {
+      "title": "{name}: WiFi-boksen kan ikke nå pejsen (F43)",
+      "description": "myfire WiFi-boksen er online, men har mistet radioforbindelsen til pejsens modtager, så Home Assistants kommandoer kan ikke nå pejsen. Fjernbetjeningen virker muligvis stadig.\n\nSluk for strømmen til pejsen i 30 sekunder, og tænd igen. Hvis MyFire-appen stadig viser F43 \"No receiver connected\", skal WiFi-boksen parres med modtageren igen efter boksens vejledning. Denne advarsel forsvinder af sig selv, når forbindelsen er genoprettet."
     }
   },
   "exceptions": {

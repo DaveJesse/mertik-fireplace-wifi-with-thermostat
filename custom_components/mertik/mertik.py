@@ -9,6 +9,11 @@ _LOGGER = logging.getLogger(__name__)
 
 COMMAND_PREFIX = "0233303330333033303830"
 STATUS_PREFIXES = ("303030300003", "030300000003")
+# Reply sent instead of a status packet when the WiFi box has lost its radio
+# link to the fireplace receiver (the MyFire app shows F43 "No receiver
+# connected"). Seen repeated for every command until the link is restored.
+RECEIVER_LOST_PREFIX = "3030303000E1"
+FCODE_RECEIVER_LOST = 43
 TCP_PORT = 2000
 SOCKET_TIMEOUT = 3
 RECV_BUFFER = 4096
@@ -101,6 +106,7 @@ class Mertik:
         self._igniting = False
         self._prev_flame_on = False
         self._handset_fault = 0  # 0 = OK, 0x06 = F44 (handset not connected)
+        self.receiver_lost = False  # True while the box cannot reach the fire (F43)
 
         self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.client.settimeout(SOCKET_TIMEOUT)
@@ -155,6 +161,8 @@ class Mertik:
     @property
     def fault_code(self) -> int:
         """Return the active fault as an F-code number (e.g. 44 for F44), or 0."""
+        if self.receiver_lost:
+            return FCODE_RECEIVER_LOST
         return HANDSET_FAULT_TO_FCODE.get(self._handset_fault, 0)
 
     @property
@@ -323,8 +331,20 @@ class Mertik:
         for prefix in STATUS_PREFIXES:
             idx = text.find(prefix)
             if idx != -1:
+                if self.receiver_lost:
+                    _LOGGER.info("Fireplace receiver link restored")
+                self.receiver_lost = False
                 self._process_status(text[idx:])
                 return
+        if RECEIVER_LOST_PREFIX in text:
+            if not self.receiver_lost:
+                _LOGGER.warning(
+                    "WiFi box at %s reports no connection to the fireplace "
+                    "receiver (F43); commands cannot reach the fire",
+                    self.ip,
+                )
+            self.receiver_lost = True
+            return
         _LOGGER.debug("Response contains no status packet: %s", data.hex())
 
     def _process_status(self, status_str: str) -> None:

@@ -355,6 +355,19 @@ are met. Controls work correctly regardless of whether "APP" is displayed.
 
 ---
 
+### Fault Code sensor shows F43 — WiFi box cannot reach the fireplace
+
+**Symptom:** The fire does not respond to Home Assistant (no beeps, light does not change), the Fireplace switch and Thermostat show as unavailable, and **Settings → Repairs** shows "WiFi box cannot reach the fireplace (F43)". The MyFire app shows F43 "No receiver connected". The handset may still work.
+
+**Description:** The myfire WiFi box is on the network but has lost its radio link to the fireplace receiver. It answers every command with a short error reply instead of a status packet, so nothing reaches the fire.
+
+**Resolution:**
+1. Switch the fireplace's power off for 30 seconds and back on.
+2. If F43 persists in the MyFire app, re-pair the WiFi box with the receiver following the box's instructions (disable the integration while pairing so the app has the box's only connection).
+3. The entities and the Repairs alert recover by themselves once the link is restored.
+
+---
+
 ### Fault Code sensor shows F44 — Handset not in range or low battery
 
 **Symptom:** The Fault Code sensor shows "F44 – Handset not in range or low battery". In Thermostatic mode, the fire may drop to Standby even though the room is cold.

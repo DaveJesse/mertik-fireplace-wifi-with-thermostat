@@ -100,15 +100,15 @@ class MertikLightEntity(MertikEntity, LightEntity, RestoreEntity):
         return self._brightness
 
     async def async_turn_on(self, **kwargs: Any) -> None:
+        # The light state is assumed (restored, never reported by the device),
+        # so always send light_on: the light may be off even if we think it is
+        # on, and a brightness command alone does not switch it on.
+        await self.hass.async_add_executor_job(self._dataservice.light_on)
         if ATTR_BRIGHTNESS in kwargs:
             self._brightness = kwargs[ATTR_BRIGHTNESS]
-            if not self._is_on:
-                await self.hass.async_add_executor_job(self._dataservice.light_on)
             await self.hass.async_add_executor_job(
                 self._dataservice.set_light_brightness, self._brightness
             )
-        else:
-            await self.hass.async_add_executor_job(self._dataservice.light_on)
         self._is_on = True
         self.async_write_ha_state()
         self._dataservice.async_set_updated_data(None)

@@ -87,6 +87,11 @@ class MertikFaultCodeSensorEntity(MertikEntity, SensorEntity):
         self._attr_unique_id = entry_id + "-FaultCode"
 
     @property
+    def available(self) -> bool:
+        """Stay available during F43 so the fault itself can be shown."""
+        return self.coordinator.last_update_success
+
+    @property
     def native_value(self) -> str:
         return FAULT_CODE_MAP.get(self._dataservice.fault_code, "none")
 

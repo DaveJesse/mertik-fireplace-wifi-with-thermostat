@@ -37,6 +37,10 @@
     "cannot_connect": {
       "title": "Cannot connect to Mertik Maxitrol fireplace",
       "description": "Home Assistant cannot reach the fireplace WiFi box at {host}. Check that the device is powered on and connected to your network. If the IP address has changed, use **Reconfigure** to update it."
+    },
+    "receiver_lost": {
+      "title": "{name}: WiFi box cannot reach the fireplace (F43)",
+      "description": "The myfire WiFi box is online but has lost its radio link to the fireplace receiver, so Home Assistant's commands cannot reach the fire. The handset may still work.\n\nSwitch the fireplace's power off for 30 seconds and back on. If the MyFire app still shows F43 \"No receiver connected\", re-pair the WiFi box with the receiver following the box's instructions. This alert clears by itself once the link is restored."
     }
   },
   "exceptions": {

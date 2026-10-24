@@ -22,3 +22,12 @@ class MertikEntity(CoordinatorEntity[MertikDataCoordinator]):
             name=device_name,
             manufacturer="Mertik Maxitrol",
         )
+
+    @property
+    def available(self) -> bool:
+        """Unavailable while the WiFi box cannot reach the fireplace (F43).
+
+        Commands would not reach the fire and the reported state would be
+        stale, so showing the entity as usable would be misleading.
+        """
+        return super().available and not self._dataservice.receiver_lost

@@ -207,6 +207,11 @@ class MertikDataCoordinator(DataUpdateCoordinator[None]):
         return self.mertik.fault_code
 
     @property
+    def receiver_lost(self) -> bool:
+        """True while the WiFi box reports no link to the fireplace (F43)."""
+        return self.mertik.receiver_lost
+
+    @property
     def is_handset_connected(self) -> bool:
         return self.mertik.is_handset_connected
 
@@ -375,6 +380,19 @@ class MertikDataCoordinator(DataUpdateCoordinator[None]):
             if (mode := self._pending_mode_due()) is not None:
                 await self.hass.async_add_executor_job(self.apply_heating_mode, mode)
             ir.async_delete_issue(self.hass, DOMAIN, "cannot_connect")
+            issue_id = f"receiver_lost_{self.config_entry.entry_id}"
+            if self.mertik.receiver_lost:
+                ir.async_create_issue(
+                    self.hass,
+                    DOMAIN,
+                    issue_id,
+                    is_fixable=False,
+                    severity=ir.IssueSeverity.ERROR,
+                    translation_key="receiver_lost",
+                    translation_placeholders={"name": self.config_entry.title},
+                )
+            else:
+                ir.async_delete_issue(self.hass, DOMAIN, issue_id)
             # Detect when fire turns off so light entity can reset its state.
             # The device physically turns the light off when fire is extinguished.
             current_on = self.is_on
