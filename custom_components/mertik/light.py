@@ -3,9 +3,10 @@
 Brightness is tracked locally. On/off follows the light byte in the status
 packet when one arrives, and is otherwise assumed from the last command.
 
-On HA startup the on/off state and brightness are restored from the previous
-session via RestoreEntity. Nothing is sent to the device at startup: commands
-only follow a user action.
+On HA startup the light is shown as off, with its brightness restored from
+the previous session; the next status packet corrects the state if the light
+is actually on. Nothing is sent to the device at startup: commands only
+follow a user action.
 
 The fire acts as a trigger for the light in both directions:
 - switched on from HA: the light is switched on once a flame is seen
@@ -24,7 +25,6 @@ import time
 from typing import Any
 
 from homeassistant.components.light import ATTR_BRIGHTNESS, ColorMode, LightEntity
-from homeassistant.const import STATE_ON
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
@@ -71,17 +71,19 @@ class MertikLightEntity(MertikEntity, LightEntity, RestoreEntity):
         self._last_command = 0.0  # time.monotonic() of our last light command
 
     async def async_added_to_hass(self) -> None:
-        """Restore the last known on/off state and brightness.
+        """Start as off and restore the last brightness.
 
-        The device does not report the light state, so this is an assumed
-        state. No command is sent to the fireplace here.
+        No command is sent to the fireplace here. If the light is actually on,
+        the next status packet reports it and the entity follows.
         """
         await super().async_added_to_hass()
+        self._is_on = False
         last_state = await self.async_get_last_state()
-        if last_state is not None:
-            self._is_on = last_state.state == STATE_ON
-            if last_state.attributes.get(ATTR_BRIGHTNESS) is not None:
-                self._brightness = last_state.attributes[ATTR_BRIGHTNESS]
+        if (
+            last_state is not None
+            and last_state.attributes.get(ATTR_BRIGHTNESS) is not None
+        ):
+            self._brightness = last_state.attributes[ATTR_BRIGHTNESS]
 
     async def _restore_light(self) -> None:
         """Send light on at the current brightness (light-with-fire)."""
