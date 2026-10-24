@@ -275,10 +275,11 @@ class MertikClimateEntity(MertikEntity, ClimateEntity, RestoreEntity):
         self._was_on = is_on
 
     def _run_thermostatic_logic(self) -> None:
-        # If we are waiting for an ignition to complete, let the
-        # coordinator handle it this cycle and skip the temperature
-        # comparison -- flame height commands are ignored during ignition.
-        if self._dataservice.check_pending_mode():
+        # While a heating mode is waiting for ignition to finish, the
+        # coordinator applies it (off the event loop) once the burner has
+        # settled; skip the temperature comparison until then -- flame height
+        # commands are ignored during ignition.
+        if self._dataservice.has_pending_mode:
             return
 
         if self._dataservice.heating_mode != MODE_THERMO:

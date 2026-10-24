@@ -292,11 +292,17 @@ class MertikDataCoordinator(DataUpdateCoordinator[None]):
             self.mertik.aux_off()
             self.mertik.set_flame_height(FLAME_MIN)
 
-    def check_pending_mode(self) -> bool:
-        """Called by the thermostatic loop each poll cycle.
+    @property
+    def has_pending_mode(self) -> bool:
+        """True while a heating mode is waiting for ignition to finish."""
+        return self._pending_mode is not None
 
-        Returns True if a pending mode was applied (so the caller knows
-        to skip its normal mode calculation this cycle).
+    def _pending_mode_due(self) -> str | None:
+        """Advance the ignition/settle state machine; no device I/O.
+
+        Called once per poll from _async_update_data. Returns the deferred
+        heating mode when it is time to apply it (the caller sends it from
+        the executor), otherwise None.
 
         After the burner lights, we wait _settle_seconds before sending
         aux_off / set_flame_height. The device firmware ignores these
@@ -305,7 +311,7 @@ class MertikDataCoordinator(DataUpdateCoordinator[None]):
         but reliable based on observed device behaviour.
         """
         if not self._pending_mode:
-            return False
+            return None
         # Abandon pending mode if ignition has taken too long (e.g. failed ignition
         # leaves is_igniting stuck True indefinitely via flame_byte bit 4).
         if self._pending_mode_since is not None:
@@ -319,7 +325,7 @@ class MertikDataCoordinator(DataUpdateCoordinator[None]):
                 self._pending_mode = None
                 self._pending_mode_since = None
                 self._flame_on_since = None
-                return False
+                return None
         # Still igniting -- wait
         if self.mertik.is_igniting:
             _LOGGER.debug(
@@ -327,11 +333,11 @@ class MertikDataCoordinator(DataUpdateCoordinator[None]):
                 self._pending_mode,
             )
             self._flame_on_since = None
-            return True
+            return None
         # Igniting bit just dropped False -- flame_on may lag by one poll cycle.
         if not self.mertik.is_flame_on:
             _LOGGER.debug("Igniting cleared but flame_on not yet set -- waiting")
-            return True
+            return None
         # Burner is lit -- start the settle timer if not already started
         if self._flame_on_since is None:
             self._flame_on_since = dt_util.utcnow()
@@ -340,7 +346,7 @@ class MertikDataCoordinator(DataUpdateCoordinator[None]):
                 self._settle_seconds,
                 self._pending_mode,
             )
-            return True
+            return None
         # Check if enough time has passed since the burner lit
         elapsed = (dt_util.utcnow() - self._flame_on_since).total_seconds()
         if elapsed < self._settle_seconds:
@@ -350,7 +356,7 @@ class MertikDataCoordinator(DataUpdateCoordinator[None]):
                 self._settle_seconds,
                 self._pending_mode,
             )
-            return True
+            return None
         # Settle period complete -- apply the deferred mode
         _LOGGER.info(
             "Settled (%.0fs), applying deferred mode %s", elapsed, self._pending_mode
@@ -359,12 +365,15 @@ class MertikDataCoordinator(DataUpdateCoordinator[None]):
         self._pending_mode = None
         self._pending_mode_since = None
         self._flame_on_since = None
-        self.apply_heating_mode(mode)
-        return True
+        return mode
 
     async def _async_update_data(self) -> None:
         try:
             await self.hass.async_add_executor_job(self.mertik.refresh_status)
+            # Apply a heating mode deferred until the burner has lit and
+            # settled. Sent from the executor: it is blocking socket I/O.
+            if (mode := self._pending_mode_due()) is not None:
+                await self.hass.async_add_executor_job(self.apply_heating_mode, mode)
             ir.async_delete_issue(self.hass, DOMAIN, "cannot_connect")
             # Detect when fire turns off so light entity can reset its state.
             # The device physically turns the light off when fire is extinguished.

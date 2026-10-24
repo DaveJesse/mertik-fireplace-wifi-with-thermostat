@@ -3,8 +3,9 @@
 Light on/off and brightness are tracked locally (fully optimistic).
 The status packet is unreliable for light state.
 
-On HA startup: always initialises to Off and sends light_off() to device.
-Brightness level is restored from the previous session via RestoreEntity.
+On HA startup the on/off state and brightness are restored from the previous
+session via RestoreEntity. Nothing is sent to the device at startup: commands
+only follow a user action.
 
 When the fire is extinguished, the device physically turns the light off.
 The entity detects this via the coordinator's fire_just_turned_off flag
@@ -15,6 +16,7 @@ light can be turned back on at the same level.
 from typing import Any
 
 from homeassistant.components.light import ATTR_BRIGHTNESS, ColorMode, LightEntity
+from homeassistant.const import STATE_ON
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
@@ -57,14 +59,17 @@ class MertikLightEntity(MertikEntity, LightEntity, RestoreEntity):
         self._brightness = DEFAULT_BRIGHTNESS
 
     async def async_added_to_hass(self) -> None:
-        """Restore brightness only; always start with light off."""
+        """Restore the last known on/off state and brightness.
+
+        The device does not report the light state, so this is an assumed
+        state. No command is sent to the fireplace here.
+        """
         await super().async_added_to_hass()
         last_state = await self.async_get_last_state()
         if last_state is not None:
+            self._is_on = last_state.state == STATE_ON
             if last_state.attributes.get(ATTR_BRIGHTNESS) is not None:
                 self._brightness = last_state.attributes[ATTR_BRIGHTNESS]
-        self._is_on = False
-        await self.hass.async_add_executor_job(self._dataservice.light_off)
 
     async def _restore_light(self) -> None:
         """Re-send light on after the device auto-killed it when fire turned off."""
