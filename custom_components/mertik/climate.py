@@ -94,14 +94,21 @@ def choose_thermostatic_mode(
     boundary; a mode further away is moved to the nearer of the two. With no
     current mode (just switched on) the plain boundary decides.
     """
-    h = hysteresis
+    # Round to 0.001 C before comparing. Temperatures come in 0.1 or 0.01 C
+    # steps, but binary floating point does not hold them exactly (e.g.
+    # 16.8 - 16.9 = -0.09999999999999787), which would make the inclusive
+    # "or equal" edges of the bands unreliable.
+    gap = round(gap, 3)
+    h = round(hysteresis, 3)
+    low = round(low, 3)
+    full = round(full, 3)
     if gap <= -h:
         return MODE_STANDBY
-    if h <= gap <= low - h:
+    if h <= gap <= round(low - h, 3):
         return MODE_LOW
-    if low + h <= gap <= full - h:
+    if round(low + h, 3) <= gap <= round(full - h, 3):
         return MODE_MEDIUM
-    if gap >= full + h:
+    if gap >= round(full + h, 3):
         return MODE_FULL
 
     # Dead zone: find the boundary we are near and the modes either side.
