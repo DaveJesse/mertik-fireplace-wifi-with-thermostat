@@ -14,6 +14,10 @@ STATUS_PREFIXES = ("303030300003", "030300000003")
 # connected"). Seen repeated for every command until the link is restored.
 RECEIVER_LOST_PREFIX = "3030303000E1"
 FCODE_RECEIVER_LOST = 43
+# Only report F43 once the box has sent nothing but "no receiver" replies for
+# this long (three 10 s polls). The box can send an occasional stray one in
+# normal use; a real loss of link repeats it for every command.
+RECEIVER_LOST_AFTER_SECONDS = 30.0
 TCP_PORT = 2000
 SOCKET_TIMEOUT = 3
 RECV_BUFFER = 4096
@@ -106,7 +110,9 @@ class Mertik:
         self._igniting = False
         self._prev_flame_on = False
         self._handset_fault = 0  # 0 = OK, 0x06 = F44 (handset not connected)
-        self.receiver_lost = False  # True while the box cannot reach the fire (F43)
+        # time.monotonic() of the first "no receiver" reply since the last
+        # status packet, or None. See receiver_lost.
+        self._no_receiver_since: float | None = None
 
         self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.client.settimeout(SOCKET_TIMEOUT)
@@ -144,6 +150,17 @@ class Mertik:
     @property
     def is_flame_on(self) -> bool:
         return self.flame_on
+
+    @property
+    def receiver_lost(self) -> bool:
+        """True once the box has reported no link to the receiver for a while.
+
+        Set only after RECEIVER_LOST_AFTER_SECONDS of "no receiver" replies with
+        no status packet in between (F43); cleared by the next status packet.
+        """
+        if self._no_receiver_since is None:
+            return False
+        return time.monotonic() - self._no_receiver_since >= RECEIVER_LOST_AFTER_SECONDS
 
     @property
     def is_pilot_on(self) -> bool:
@@ -338,17 +355,13 @@ class Mertik:
             if idx != -1:
                 if self.receiver_lost:
                     _LOGGER.info("Fireplace receiver link restored")
-                self.receiver_lost = False
+                self._no_receiver_since = None
                 self._process_status(text[idx:])
                 return
         if RECEIVER_LOST_PREFIX in text:
-            if not self.receiver_lost:
-                _LOGGER.warning(
-                    "WiFi box at %s reports no connection to the fireplace "
-                    "receiver (F43); commands cannot reach the fire",
-                    self.ip,
-                )
-            self.receiver_lost = True
+            _LOGGER.debug("WiFi box replied 'no receiver' (E1): %s", data.hex())
+            if self._no_receiver_since is None:
+                self._no_receiver_since = time.monotonic()
             return
         _LOGGER.debug("Response contains no status packet: %s", data.hex())
 
