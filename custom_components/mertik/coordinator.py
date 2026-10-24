@@ -4,6 +4,7 @@ import logging
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 import homeassistant.helpers.issue_registry as ir
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
@@ -33,9 +34,6 @@ class MertikDataCoordinator(DataUpdateCoordinator[None]):
         # Light-with-fire: armed when the user switches the fire on, fired
         # (light_on_due) on the first update where a flame is seen.
         self._light_with_next_flame: bool = False
-        # Switch-on requested while the fire was still shutting down; carried
-        # out once the device reports the shutdown has finished.
-        self._turn_on_after_shutdown: bool = False
         self.light_on_due: bool = False
         self.fire_just_turned_off: bool = (
             False  # set True for one cycle when fire turns off
@@ -110,16 +108,10 @@ class MertikDataCoordinator(DataUpdateCoordinator[None]):
         from .const import CONF_LIGHT_WITH_FIRE, DEFAULT_LIGHT_WITH_FIRE, MODE_THERMO
 
         if self.mertik.is_shutting_down:
-            # Commanding the receiver during its shutdown sequence has been
-            # seen to make the WiFi box lose it (F43). Wait for the shutdown
-            # to finish, as the handset does.
-            _LOGGER.info(
-                "Fire is still shutting down; it will be switched on when the "
-                "shutdown has finished"
-            )
-            self._turn_on_after_shutdown = True
+            # Safety net; switch-on requests are normally refused earlier by
+            # check_ignition_allowed() with a message to the user.
+            _LOGGER.warning("Switch-on ignored: the fire is still shutting down")
             return
-        self._turn_on_after_shutdown = False
         self._light_with_next_flame = bool(
             self.config_entry.options.get(
                 CONF_LIGHT_WITH_FIRE,
@@ -136,10 +128,23 @@ class MertikDataCoordinator(DataUpdateCoordinator[None]):
             self.mark_optimistic_on()
             self.apply_heating_mode(mode)
 
+    def check_ignition_allowed(self) -> None:
+        """Refuse a switch-on while the fire is still shutting down.
+
+        After switching off, the receiver runs a shutdown sequence (about
+        15 s) during which the MyFire app reports "Ignition is not allowed".
+        Commanding it then was seen to make the WiFi box lose the receiver
+        (F43), so the request is refused with a message instead.
+        """
+        if self.mertik.is_shutting_down:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="ignition_not_allowed",
+            )
+
     def turn_off(self) -> None:
         """Switch the fire fully off, pilot included (blocking I/O)."""
         self._light_with_next_flame = False
-        self._turn_on_after_shutdown = False
         self.guard_flame_off()
         self.mark_optimistic_off()
 
@@ -428,10 +433,6 @@ class MertikDataCoordinator(DataUpdateCoordinator[None]):
     async def _async_update_data(self) -> None:
         try:
             await self.hass.async_add_executor_job(self.mertik.refresh_status)
-            # A switch-on that arrived during shutdown: carry it out now.
-            if self._turn_on_after_shutdown and not self.mertik.is_shutting_down:
-                _LOGGER.info("Shutdown finished; switching the fire on")
-                await self.hass.async_add_executor_job(self.turn_on)
             # Apply a heating mode deferred until the burner has lit and
             # settled. Sent from the executor: it is blocking socket I/O.
             if (mode := self._pending_mode_due()) is not None:

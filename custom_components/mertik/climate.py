@@ -311,6 +311,7 @@ class MertikClimateEntity(MertikEntity, ClimateEntity, RestoreEntity):
         """Switch the fire on in the current heating mode."""
         if self._dataservice.is_on:
             return
+        self._dataservice.check_ignition_allowed()
         await self.hass.async_add_executor_job(self._dataservice.turn_on)
         self._dataservice.async_set_updated_data(None)
 

@@ -53,6 +53,9 @@
     },
     "update_failed": {
       "message": "Fejl i kommunikationen med pejsen."
+    },
+    "ignition_not_allowed": {
+      "message": "Tænding er ikke tilladt, mens pejsen lukker ned. Prøv igen om et par sekunder."
     }
   },
   "entity": {

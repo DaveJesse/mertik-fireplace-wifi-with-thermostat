@@ -42,6 +42,7 @@ class MertikOnOffSwitchEntity(MertikEntity, SwitchEntity):
         return bool(self._dataservice.is_on)
 
     async def async_turn_on(self, **kwargs: Any) -> None:
+        self._dataservice.check_ignition_allowed()
         await self.hass.async_add_executor_job(self._dataservice.turn_on)
         self._dataservice.async_set_updated_data(None)
 

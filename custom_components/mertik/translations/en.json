@@ -53,6 +53,9 @@
     },
     "update_failed": {
       "message": "Error communicating with the fireplace."
+    },
+    "ignition_not_allowed": {
+      "message": "Ignition is not allowed while the fireplace is shutting down. Try again in a few seconds."
     }
   },
   "entity": {

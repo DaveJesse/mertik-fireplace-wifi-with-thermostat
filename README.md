@@ -172,11 +172,11 @@ pilot as well, turn off the Fireplace switch.
 
 **Switching on while the fire is shutting down** — after the fire is switched
 off, the receiver runs a short shutdown sequence (about 15 seconds), during
-which the MyFire app reports "Ignition is not allowed". If the fire is
-switched on from Home Assistant during it, the request is held and
-carried out as soon as the shutdown has finished; switching off again cancels
-it. Commanding the receiver mid-shutdown was seen to make the WiFi box lose it
-(F43).
+which the MyFire app reports "Ignition is not allowed". Home Assistant does the
+same: switching on during it is refused with the message "Ignition is not
+allowed while the fireplace is shutting down", and nothing is sent. Switch on
+again once the shutdown has finished. (Commanding the receiver mid-shutdown was
+seen to make the WiFi box lose it, F43.)
 
 The thresholds and hysteresis are adjustable via
 **Settings → Devices & Services → Mertik → Configure**.
