@@ -167,9 +167,11 @@ defaults: the burner drops to pilot at 19.6 °C and relights at 19.4 °C.
 
 When the room reaches the setpoint the main burners are extinguished but
 the **pilot flame remains lit**, allowing fast re-ignition when the room
-cools. Once the burner has dropped to pilot it is not relit for at least the
-**Minimum time between re-ignitions** (default 2 minutes), to limit wear on
-the igniter. To extinguish the pilot as well, turn off the Fireplace switch.
+cools: while the pilot is lit the burner relights from it straight away. If
+the pilot has gone out, a full spark ignition is needed; it is held off until
+the **Minimum time between re-ignitions** (default 2 minutes) has passed since
+the burner dropped to pilot, to limit wear on the igniter. To extinguish the
+pilot as well, turn off the Fireplace switch.
 
 The thresholds, hysteresis and minimum re-ignition time are adjustable via
 **Settings → Devices & Services → Mertik → Configure**.
@@ -260,7 +262,7 @@ so the IP does not change.
 | **Thermostat setpoint step** | Increment for the thermostat temperature slider (degrees °C). Default: `0.1`. Must be greater than 0. |
 | **Default target temperature** | See above. |
 | **Hysteresis** | Degrees °C either side of each threshold within which the current mode is kept (see *Thermostatic control*). Default: `0.1`. Twice the value must fit within the Low band and the Medium band. |
-| **Minimum time between re-ignitions** | Minutes the burner stays on pilot after the thermostat has turned it down, before it may relight. Default: `2`. 0–60. |
+| **Minimum time between re-ignitions** | Minutes after the thermostat has turned the burner down before a full spark ignition is allowed, if the pilot has gone out. With the pilot lit the burner relights at once. Default: `2`. 0–60. |
 | **Switch the light on when the fire is switched on** | On by default, matching the handset. When you switch the fire on from Home Assistant, the fire light comes on at its last brightness as soon as a flame is seen. It is only done once per switch-on, so a light you turn off stays off while the fire cycles. The light can always be switched on and off on its own, with the fire on or off. |
 
 ### Removing the integration

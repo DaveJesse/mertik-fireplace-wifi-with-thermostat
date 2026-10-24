@@ -230,6 +230,11 @@ class MertikDataCoordinator(DataUpdateCoordinator[None]):
         return due
 
     @property
+    def is_pilot_on(self) -> bool:
+        """A flame (pilot or burner) is burning, from the status packet."""
+        return self.mertik.is_pilot_on
+
+    @property
     def not_responding(self) -> bool:
         """True while the WiFi box is not replying at all."""
         return self.mertik.not_responding

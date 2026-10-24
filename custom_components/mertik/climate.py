@@ -276,6 +276,10 @@ class MertikClimateEntity(MertikEntity, ClimateEntity, RestoreEntity):
     def hvac_action(self) -> HVACAction:
         """Heating when the burner is lit, idle on pilot only, else off."""
         mertik = self._dataservice.mertik
+        if self._dataservice._in_standby:
+            # Thermostatic standby: pilot only. The device's flame byte does not
+            # distinguish pilot from burner, so use our own standby state.
+            return HVACAction.IDLE
         if mertik.is_flame_on or mertik.is_igniting:
             return HVACAction.HEATING
         if self._dataservice.is_on:
@@ -405,11 +409,15 @@ class MertikClimateEntity(MertikEntity, ClimateEntity, RestoreEntity):
         )
 
         # Minimum time between re-ignitions: once the thermostat has dropped
-        # the burner to pilot, keep it there until the time has passed.
+        # the burner to pilot, a full (spark) ignition is held off until the
+        # time has passed. While the pilot is still lit the burner relights
+        # from it with no ignition cycle, so there is nothing to protect and
+        # the burner relights at once.
         if (
             target_mode != MODE_STANDBY
             and self._thermo_mode == MODE_STANDBY
             and self._standby_since is not None
+            and not self._dataservice.is_pilot_on
         ):
             waited = (dt_util.utcnow() - self._standby_since).total_seconds()
             if waited < self._min_reignition_seconds:
