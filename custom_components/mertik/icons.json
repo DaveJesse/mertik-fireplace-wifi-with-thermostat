@@ -34,6 +34,23 @@
           "off": "mdi:fire-off"
         }
       }
+    },
+    "sensor": {
+      "flame_height": {
+        "default": "mdi:fire",
+        "state": {
+          "off": "mdi:fire-off",
+          "pilot": "mdi:campfire",
+          "low": "mdi:fire",
+          "high": "mdi:fire-circle"
+        }
+      },
+      "fault_code": {
+        "default": "mdi:alert",
+        "state": {
+          "off": "mdi:check-circle-outline"
+        }
+      }
     }
   }
 }

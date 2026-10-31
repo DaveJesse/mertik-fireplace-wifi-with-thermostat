@@ -172,6 +172,9 @@ class MertikClimateEntity(MertikEntity, ClimateEntity, RestoreEntity):
         # Previous fire on/off state, used to detect switch-on (off -> on) so
         # the setpoint can be reset to the configured default.
         self._was_on: bool | None = None
+        # Setpoint chosen while the fire was off: used at the next switch-on
+        # instead of the default.
+        self._set_while_off = False
 
     async def async_added_to_hass(self) -> None:
         """Restore target temperature from last known state."""
@@ -270,11 +273,7 @@ class MertikClimateEntity(MertikEntity, ClimateEntity, RestoreEntity):
     def hvac_action(self) -> HVACAction:
         """Heating when the burner is lit, idle on pilot only, else off."""
         mertik = self._dataservice.mertik
-        if self._dataservice._in_standby:
-            # Thermostatic standby: pilot only. The device's flame byte does not
-            # distinguish pilot from burner, so use our own standby state.
-            return HVACAction.IDLE
-        if mertik.is_flame_on or mertik.is_igniting:
+        if mertik.is_burner_lit or mertik.is_igniting:
             return HVACAction.HEATING
         if self._dataservice.is_on:
             return HVACAction.IDLE
@@ -294,6 +293,9 @@ class MertikClimateEntity(MertikEntity, ClimateEntity, RestoreEntity):
         step = self.target_temperature_step
         snapped = round(round(float(temp) / step) * step, 2)
         self._target_temp = max(MIN_TEMP, min(MAX_TEMP_C, snapped))
+        if not self._dataservice.is_on:
+            # Chosen before switching on: keep it at switch-on.
+            self._set_while_off = True
         # Re-check now against the new setpoint. Do not clear
         # _last_applied_mode: a command is only sent if the mode actually
         # changes (re-sending the same mode makes the fire beep).
@@ -341,15 +343,25 @@ class MertikClimateEntity(MertikEntity, ClimateEntity, RestoreEntity):
 
         Covers every way of switching on (HA switch, handset, MyFire app),
         because it watches the fire's on/off state rather than the switch.
+        A setpoint chosen while the fire was off is kept instead.
         """
         is_on = self._dataservice.is_on
         if self._was_on is False and is_on:
-            self._target_temp = self._default_target
             self._last_applied_mode = None
-            _LOGGER.debug(
-                "Fire switched on: setpoint reset to default %.1f C",
-                self._target_temp,
-            )
+            if self._set_while_off:
+                _LOGGER.debug(
+                    "Fire switched on: keeping setpoint %.1f C chosen while off",
+                    self._target_temp,
+                )
+            else:
+                self._target_temp = self._default_target
+                _LOGGER.debug(
+                    "Fire switched on: setpoint reset to default %.1f C",
+                    self._target_temp,
+                )
+            self._set_while_off = False
+        elif self._was_on and not is_on:
+            self._set_while_off = False
         self._was_on = is_on
 
     def _run_thermostatic_logic(self) -> None:
@@ -359,6 +371,9 @@ class MertikClimateEntity(MertikEntity, ClimateEntity, RestoreEntity):
         # commands are ignored during ignition.
         if self._dataservice.has_pending_mode:
             return
+        if self._dataservice.thermo_recheck:
+            self._dataservice.thermo_recheck = False
+            self._last_applied_mode = None
 
         if self._dataservice.heating_mode != MODE_THERMO:
             self._last_applied_mode = None  # reset when leaving thermo mode

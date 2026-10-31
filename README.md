@@ -24,7 +24,7 @@ See [PROTOCOL.md](PROTOCOL.md) for full wire-level documentation.
 | Feature | Original | This fork |
 |---------|----------|-----------|
 | On / Off | ✅ | ✅ |
-| Flame height (1–13 steps) | ✅ (broken) | ✅ fixed |
+| Flame height (12 steps) | ✅ (broken) | ✅ fixed |
 | Light on/off + dimming | ✅ (broken) | ✅ fixed |
 | Aux / rear burner | ✅ (broken) | ✅ fixed |
 | Temperature sensor | ✅ (broken) | ✅ fixed |
@@ -60,10 +60,10 @@ ITALKERO, Signi, SAFIRE, attika, Ortal, and Fire Connects.
 | Fireplace | Switch | Main on/off |
 | Heating Mode | Select | Standby / Full Heat / Medium Heat / Low Heat / Thermostatic |
 | Thermostat | Climate | The whole control panel: Heat/Off, heating mode presets (Low, Medium, Full, Thermostatic), target and measured room temperature, and heating/idle status |
-| Light | Light | Dimmable. Comes on when the fire is switched on (optional) and goes off when the fire goes out; can also be switched on its own |
-| Aux Burner | Binary sensor | Read-only: shows whether the rear / second burner is lit (set by the heating mode) |
-| Flame Height | Sensor | Read-only: current flame step, 0 when the fire is off (set by the heating mode) |
-| Handset Temperature | Sensor | Room temperature from the paired handset. Hidden automatically when another temperature sensor is selected. |
+| Light | Light | Dimmable. On/off and brightness as reported by the fireplace, so it follows the handset and the MyFire app too. Comes on when the fire is switched on (optional) and goes off when the fire goes out; can also be switched on its own |
+| Aux Burner | Binary sensor | Read-only: whether the rear / second burner is lit, as reported by the fireplace. Off while the thermostat holds the fire on pilot |
+| Flame Height | Sensor | Read-only: **Off**, **Pilot only**, **Low** or **High**, from the flame the fireplace reports (Low Heat shows Low; Medium and Full Heat show High; the fire lights at High). Steps 1–6 set with the handset show as Low, 7–12 as High |
+| Handset Temperature | Sensor | Room temperature from the paired handset; unknown while the handset is not connected (F44). The fireplace keeps showing a missing handset's last reading for about 90 minutes, so the integration also treats it as not connected when the reading has not changed for 30 minutes with the burner lit. Hidden automatically when another temperature sensor is selected. |
 | Fault Code | Sensor | Active Mertik fault, e.g. F44 (handset out of range). Shows "No fault" when all clear. |
 
 Aux and Flame Height are indicators, not controls: the heating mode decides
@@ -87,6 +87,12 @@ entity, and add the **HVAC modes** and **Preset modes** features, or paste
 this YAML (**Edit dashboard → Add card → Manual**), replacing `fireplace` with
 your entity names:
 
+> Your entity IDs start with your fireplace's name, e.g.
+> `light.living_room_fireplace_light` rather than `light.fireplace_light`.
+> Find them under **Settings → Devices & services → Mertik Maxitrol → your
+> fireplace**. A card naming an entity that does not exist does nothing (the
+> log says "Referenced entities … are missing").
+
 ```yaml
 type: vertical-stack
 cards:
@@ -104,15 +110,22 @@ cards:
           - medium_heat
           - full_heat
           - thermostatic
-  - type: glance
-    entities:
-      - entity: binary_sensor.fireplace_aux_burner
+  - type: grid
+    columns: 3
+    square: false
+    cards:
+      - type: tile
+        entity: binary_sensor.fireplace_aux_burner
         tap_action:
           action: none
-      - entity: sensor.fireplace_flame_height
+      - type: tile
+        entity: sensor.fireplace_flame_height
+        color: deep-orange
         tap_action:
           action: none
-      - entity: sensor.fireplace_fault_code
+      - type: tile
+        entity: sensor.fireplace_fault_code
+        color: red
         tap_action:
           action: none
   - type: tile
@@ -122,6 +135,13 @@ cards:
     features:
       - type: light-brightness
 ```
+
+Home Assistant only colours a sensor's tile when the card sets a `color`, as
+above: Flame Height then shows in colour for Pilot only, Low and High and grey
+for Off, and Fault Code shows red for a fault and grey for No fault.
+
+The light shows nine distinct brightness levels across the slider (see
+[PROTOCOL.md](PROTOCOL.md#light)); the lowest setting is very dim.
 
 The target temperature is used in Thermostatic mode; in the other modes it
 is kept for the next time Thermostatic is selected.
@@ -148,7 +168,8 @@ the main burners and the pilot flame.
 Set the target temperature using the **Thermostat** entity's temperature
 slider. Each time the fire is switched on (from HA, the handset or the MyFire
 app) the target is reset to the fireplace's **Default target temperature**
-(20 °C unless changed); changes made while the fire is on last until it is
+(20 °C unless changed), unless you changed it while the fire was off: then
+your setting is kept. Changes made while the fire is on last until it is
 switched off. HA reads the current room temperature every 10 seconds and applies
 the appropriate heating mode:
 
@@ -186,11 +207,13 @@ mid-shutdown was seen to make the WiFi box lose it, F43.)
 The thresholds and hysteresis are adjustable via
 **Settings → Devices & Services → Mertik → Configure**.
 
-**Cold start behaviour** — when the thermostat calls for heat from fully off,
-the fire ignites at full heat (both burners). After the burner is confirmed
-lit and a 35-second settle period, the correct mode (Low / Medium / Full) is
-applied automatically. This delay is required because the device ignores
-flame height and aux commands in the seconds immediately after ignition.
+**Switching on in Thermostatic** — the fire is always ignited (both burners
+light). After the burner is confirmed lit and a 35-second settle period, the
+thermostat applies the right mode: Low / Medium / Full if the room needs heat,
+otherwise it turns the fire down to pilot only. The delay is required because
+the device ignores flame height and aux commands in the seconds immediately
+after ignition. (The device's standby command only turns a burning fire down
+to pilot; it does not light a cold fire.)
 
 ### Temperature sensor
 
@@ -216,14 +239,15 @@ instead and thermostatic control continues unaffected by the handset fault.
 
 ## Data updates
 
-The integration communicates with the fireplace over a **direct local TCP connection** (port 2000) with no cloud dependency. The device sends some notifications of its own (for example when the light is switched with the handset), but the integration does not rely on them: it polls.
+The integration communicates with the fireplace over a **direct local TCP connection** (port 2000) with no cloud dependency. Everything it shows comes from polling the fireplace's status. It opens a short connection for each poll or command and closes it again, because the WiFi box serves one client at a time: this lets the integration and the MyFire app work side by side.
 
 HA **polls the device every 10 seconds** by sending a status request and parsing the response. Each poll refreshes:
 
-- On/off state and flame status
+- On/off state and flame status: pilot only or burner lit, and the flame height
 - Ignition and shutdown flags
-- Light on/off (so changes made with the handset or the MyFire app are followed)
-- Ambient temperature (from the handset sensor)
+- Aux (rear) burner
+- Light on/off (however it was switched: Home Assistant, the handset or the MyFire app)
+- Room temperature from the handset
 - Fault state (F43 / F44)
 
 The 10-second interval is chosen for two reasons:
@@ -231,6 +255,20 @@ The 10-second interval is chosen for two reasons:
 2. **Optimistic state window** — after a command (e.g. turn on), the integration shows the new state optimistically for up to 20 seconds while the device executes the request. A slower poll interval would leave the UI unresponsive for an unacceptable portion of the ignition cycle.
 
 **Optimistic state model** — because the device takes several seconds to physically execute commands (ignition, shutdown), the integration maintains local optimistic state between polls. For example, after pressing "On", the Fireplace switch shows as on immediately; if the device has not confirmed the change within 20 seconds, the state reverts to what the device reports. This avoids a flickering UI during normal use.
+
+**Only what changes is sent** — every command makes the fire beep, so a
+heating-mode change sends only the commands that change something, judged from
+the fireplace's latest status (for example Medium → Low sends just the flame
+height, not "aux off" as well). About 25 seconds later the integration checks
+that the fireplace reports the new mode and, if not, sends it once more; if
+that fails too, it logs a warning.
+
+**Commands are sent one at a time** — after each command (anything other than
+the status poll) the integration waits for the fireplace's acknowledgement,
+then leaves 2 seconds before the next. Sending a second command while the
+receiver was still handling the first was seen to be refused ("no receiver")
+almost every time, and once to be followed by a long loss of the receiver
+(F43). A heating-mode change therefore takes a few seconds to complete.
 
 There is no user-configurable polling interval. The interval is fixed because the thermostatic control algorithm depends on a consistent polling rate.
 
@@ -241,9 +279,8 @@ There is no user-configurable polling interval. The interval is fixed because th
 Requires **Home Assistant 2025.3 or later**.
 
 ### HACS (recommended)
-1. HACS → Integrations → ⋮ → Custom repositories
-2. Add this repository URL, category: Integration
-3. Install "Mertik Maxitrol Fireplace", restart HA
+1. Open HACS and search for "Mertik Maxitrol Fireplace"
+2. Download it, then restart Home Assistant
 
 ### Manual
 1. Copy `custom_components/mertik/` into `config/custom_components/`
@@ -264,7 +301,7 @@ so the IP does not change.
 | **Temperature sensor** | No | Room temperature sensor for thermostatic control. Default: the Mertik handset. |
 | **Low Heat threshold** | No | Degrees °C below the thermostat setpoint at which Low Heat is applied. Default: `1.0`. Must be greater than 0 and less than the Full Heat threshold. |
 | **Full Heat threshold** | No | Degrees °C below the thermostat setpoint at which Full Heat is applied. Default: `2.0`. Must be greater than the Low Heat threshold. |
-| **Default target temperature** | No | Thermostat target applied each time the fire is switched on. Default: `20.0`. 5–36 °C. |
+| **Default target temperature** | No | Thermostat target applied each time the fire is switched on (unless a target was set while the fire was off). Default: `20.0`. 5–36 °C. |
 
 #### Options (Settings → Devices & Services → Mertik Maxitrol → Configure)
 
@@ -300,33 +337,42 @@ Import any of these automation blueprints directly into Home Assistant.
 | Turn off when nobody home | Turns the fire off when all tracked people leave | [![Import blueprint](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fraw.githubusercontent.com%2FDaveJesse%2Fmertik-fireplace-wifi-with-thermostat%2Fmain%2Fblueprints%2Fturn_off_when_nobody_home.yaml) |
 | Schedule-based on/off | Turns the fire on in Thermostatic mode and off at set times each day | [![Import blueprint](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fraw.githubusercontent.com%2FDaveJesse%2Fmertik-fireplace-wifi-with-thermostat%2Fmain%2Fblueprints%2Fschedule_based_control.yaml) |
 
-> **Note:** The integration does not send a turn-off command at startup (doing so
-> interferes with flame height control). The **Safety shutoff** blueprint above
-> is the recommended way to handle this.
+> **Note:** The integration sends nothing to the fire at startup. To make sure
+> the fire is off after Home Assistant restarts, use the **Safety shutoff**
+> blueprint above.
 
 ---
 
 ## Known limitations
 
-**Flame height feedback** — The device status packet always reports the
-post-ignition baseline flame level regardless of `set_flame_height` commands.
-Flame height is therefore tracked locally from commands. The audible beep and
-physical flame change confirm the command was received and executed.
+**Switching off always wins** — once the fire is switched off, from Home
+Assistant, the handset or the MyFire app, Home Assistant treats it as off and
+the thermostat will not light it again, however cold the room gets. This holds
+while the flame is still dying down (it takes about 30 seconds to go out). To
+resume thermostatic control, switch the fire on again. If the fire is lit from
+the handset or the app after it has gone out, Home Assistant follows that once
+the flame has been reported continuously for 15 seconds. The handset and the
+app always light the fire at Full Heat, so a manual Heating Mode selected in
+Home Assistant changes to Full Heat to match (nothing is sent to the fire); in
+Thermostatic the thermostat takes over as usual (a single status
+message with a flipped flame bit has been seen, and is ignored). After a Home
+Assistant restart the fire counts as off unless the first status shows a flame.
 
-**Fireplace switch takes precedence over thermostatic control** — turning the
-fire off via the Fireplace switch prevents the thermostat from re-igniting it,
-even if the room temperature drops below the setpoint. To resume thermostatic
-control, turn the Fireplace switch back on.
+**Rear burner at ignition** — Both burners light at ignition, and the
+fireplace reports the rear burner on by itself; the heating mode then turns it
+off if not needed. (Up to 2.5.2 the integration also sent "aux on" straight
+after ignite; the fireplace answered it with "no receiver" every time, so it
+is no longer sent.)
 
-**Rear burner at ignition** — Both burners light physically at ignition.
-The integration sends `aux_on` immediately after ignite so the Aux Burner
-indicator shows On; the heating mode then turns it off if not needed.
-
-**Light when fire turns off** — The device physically extinguishes the light
-when the fire is turned off (from Home Assistant, the handset or the app).
-The integration detects this and shows the light as off, without sending
-anything. Its brightness is kept, so the light comes back at the same level.
-The light can be switched on again on its own with the fire off.
+**Light when fire turns off** — The fireplace switches the light off when
+the fire is turned off (from Home Assistant, the handset or the app), and the
+light stays off; Home Assistant shows it off once the fireplace reports it.
+After the shutdown has finished, the integration sends its brightness setting
+to the fire (this does not switch the light on), so that the next time the
+light comes on it is at the level Home Assistant shows. It comes on again when
+the fire is next switched on from Home Assistant (with **Switch the light on
+when the fire is switched on**), or whenever you switch it on yourself, fire
+on or off.
 
 **Handset APP mode** — The handset shows "APP" only when specific conditions
 are met. Controls work correctly regardless of whether "APP" is displayed.
@@ -359,13 +405,13 @@ are met. Controls work correctly regardless of whether "APP" is displayed.
 1. Confirm the integration is set up and the config entry is loaded (not in a failed state).
 2. Power-cycle the myfire WiFi box (unplug it from the fireplace for 10 seconds).
 3. Check the HA log (`Settings → System → Logs`) for connection errors referencing the fireplace IP.
-4. If problems persist, close the MyFire app on all phones and tablets and try again; the app and the integration usually work side by side, but the box handles one connection best.
+4. If problems persist, close the MyFire app on all phones and tablets and try again. The integration uses a short connection for each poll so it can work alongside the app, but the box serves only one client at a time.
 
 ---
 
-### Flame Height indicator does not match the fire
+### Flame Height lags behind a heating mode change
 
-**Description:** The device status packet always reports the post-ignition baseline flame level regardless of `set_flame_height` commands, so the integration shows the flame step it last commanded. After a restart or reconnect it may not match the fire until the heating mode next changes. Flame height commands sent within ~35 seconds of ignition are ignored by the firmware; the integration waits for this automatically.
+**Description:** The Flame Height sensor shows the gas valve position the fireplace reports. The valve moves gradually, so after a change it can take a poll or two (10–20 seconds) to settle (for example Low → High). Flame height commands sent within ~35 seconds of ignition are ignored by the firmware; the integration waits for this automatically.
 
 ---
 
@@ -383,6 +429,16 @@ are met. Controls work correctly regardless of whether "APP" is displayed.
 
 ---
 
+### "The fire did not follow Home Assistant" alert
+
+**Symptom:** **Settings → Repairs** shows "the fire did not follow Home Assistant", for example the burner still lit after the thermostat turned it down to pilot.
+
+**Description:** After each heating-mode change the integration checks, about 25 seconds later, that the fireplace reports the new mode, and sends it again if not. The fireplace has twice been seen to acknowledge "down to pilot" and carry on at Low. If three attempts fail, this alert is raised so that Home Assistant does not quietly show a mode the fire is not in.
+
+**Resolution:** Check the fire. Select the heating mode again, or switch the fire off. The alert clears by itself once the fire follows.
+
+---
+
 ### "WiFi box is not responding" alert
 
 **Symptom:** The controls show as unavailable and **Settings → Repairs** shows "WiFi box is not responding". The MyFire app usually shows a loss of signal at the same time.
@@ -397,7 +453,7 @@ are met. Controls work correctly regardless of whether "APP" is displayed.
 
 **Symptom:** The fire does not respond to Home Assistant (no beeps, light does not change), the Fireplace switch and Thermostat show as unavailable, and **Settings → Repairs** shows "WiFi box cannot reach the fireplace (F43)". The MyFire app shows F43 "No receiver connected". The handset may still work.
 
-**Description:** The myfire WiFi box is on the network but has lost its radio link to the fireplace receiver. It answers every command with a short error reply instead of a status packet, so nothing reaches the fire.
+**Description:** The myfire WiFi box is on the network but has lost its radio link to the fireplace receiver. It answers every command with a short error reply instead of a status packet (or with status packets marked as having no receiver link), so nothing reaches the fire. A link that drops for a few seconds while the fire ignites or shuts down is normal and is ignored; F43 is reported only if it lasts 30 seconds.
 
 **Resolution:**
 1. Switch the fireplace's power off for 30 seconds and back on.
@@ -410,7 +466,7 @@ are met. Controls work correctly regardless of whether "APP" is displayed.
 
 **Symptom:** The Fault Code sensor shows "F44 – Handset not in range or low battery". In Thermostatic mode, the fire may drop to Standby even though the room is cold.
 
-**Description:** The myfire handset communicates with the WiFi receiver via 868 MHz RF. When the handset is out of range, has a low battery, or is turned off, the receiver loses contact and reports F44. Because the handset is also the device's temperature sensor, the integration cannot trust any temperature reading the device reports in this state. When no external HA sensor is configured, the integration automatically falls back to Standby to avoid heating based on a meaningless temperature value.
+**Description:** Shown when the fireplace reports the handset missing, or when the handset's temperature has not changed for 30 minutes with the burner lit (a handset without batteries keeps its last reading in the fireplace's status for about 90 minutes before the fireplace reports it missing). The myfire handset communicates with the WiFi receiver via 868 MHz RF. When the handset is out of range, has a low battery, or is turned off, the receiver loses contact and reports F44. Because the handset is also the device's temperature sensor, the integration cannot trust any temperature reading the device reports in this state. When no external HA sensor is configured, the integration automatically falls back to Standby to avoid heating based on a meaningless temperature value.
 
 **Resolution:**
 1. Check handset battery — replace if low.

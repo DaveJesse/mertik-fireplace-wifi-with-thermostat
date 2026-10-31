@@ -46,6 +46,10 @@
     "not_responding": {
       "title": "{name}: WiFi-boksen svarer ikke",
       "description": "myfire WiFi-boksen har ikke svaret på nogen kommando i 30 sekunder, så Home Assistant kan ikke styre pejsen. MyFire-appen viser som regel samtidig, at signalet er mistet.\n\nBetjening af pejsen med fjernbetjeningen genopretter ofte forbindelsen. Hvis ikke, så sluk for strømmen til pejsen i 30 sekunder og tænd igen, og kontrollér modtagerens strømforsyning eller batterier. Denne advarsel forsvinder af sig selv, når boksen svarer igen."
+    },
+    "mode_not_followed": {
+      "title": "{name}: ildstedet fulgte ikke Home Assistant",
+      "description": "Home Assistant har sat ildstedet til **{mode}** tre gange, men ildstedet melder stadig noget andet (f.eks. brænderen tændt efter skift til vågeblus). Ildstedet gør måske ikke det, Home Assistant viser.\n\nTjek ildstedet, og vælg derefter varmetilstanden igen eller sluk ildstedet. Denne advarsel forsvinder af sig selv, når ildstedet følger med."
     }
   },
   "exceptions": {
@@ -87,7 +91,7 @@
       "fault_code": {
         "name": "Fejlkode",
         "state": {
-          "none": "Ingen fejl",
+          "off": "Ingen fejl",
           "f02": "F02 – Motor- / mikrokontaktfejl",
           "f03": "F03 – Fejl i termoelementets ledninger eller TÆND/SLUK-kontakten",
           "f04": "F04 – Fejl i tændingssekvensen (vent 1 min, prøv igen)",
@@ -109,7 +113,13 @@
         }
       },
       "flame_height": {
-        "name": "Flammehøjde"
+        "name": "Flammehøjde",
+        "state": {
+          "off": "Slukket",
+          "pilot": "Kun vågeblus",
+          "low": "Lav",
+          "high": "Høj"
+        }
       }
     },
     "light": {

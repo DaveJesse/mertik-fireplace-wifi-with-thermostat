@@ -45,10 +45,28 @@ def _valid_hysteresis(h: float, low: float, full: float) -> bool:
 _LOGGER = logging.getLogger(__name__)
 
 
+# Form value for "use the handset". Not the empty string: the frontend leaves
+# an empty choice out of what it sends, and the form's default (the sensor in
+# use) then came back, so the handset could never be chosen again. Stored as
+# DEFAULT_TEMP_SENSOR ("").
+HANDSET_CHOICE = "handset"
+
+
+def _sensor_to_form(sensor: str) -> str:
+    return sensor or HANDSET_CHOICE
+
+
+def _sensor_from_form(user_input: dict[str, Any]) -> dict[str, Any]:
+    """Map the handset choice back to the stored value."""
+    if user_input.get(CONF_TEMP_SENSOR) == HANDSET_CHOICE:
+        user_input = {**user_input, CONF_TEMP_SENSOR: DEFAULT_TEMP_SENSOR}
+    return user_input
+
+
 def _temp_sensor_options(hass: HomeAssistant) -> dict[str, str]:
     """Return {entity_id: friendly_name} for all temperature sensors."""
     registry = er.async_get(hass)
-    options = {"": "Mertik handset (built-in)"}
+    options = {HANDSET_CHOICE: "Mertik handset (built-in)"}
     for entry in registry.entities.values():
         state = hass.states.get(entry.entity_id)
         if state is None:
@@ -70,6 +88,7 @@ class MertikConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     ) -> ConfigFlowResult:
         errors: dict[str, str] = {}
         if user_input is not None:
+            user_input = _sensor_from_form(user_input)
             host = user_input[CONF_HOST]
             low = user_input.get(CONF_LOW_THRESHOLD, DEFAULT_LOW_THRESHOLD)
             high = user_input.get(CONF_HIGH_THRESHOLD, DEFAULT_HIGH_THRESHOLD)
@@ -97,7 +116,7 @@ class MertikConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             {
                 vol.Required(CONF_NAME, default=DEFAULT_NAME): str,
                 vol.Required(CONF_HOST): str,
-                vol.Optional(CONF_TEMP_SENSOR, default=DEFAULT_TEMP_SENSOR): vol.In(
+                vol.Optional(CONF_TEMP_SENSOR, default=HANDSET_CHOICE): vol.In(
                     _temp_sensor_options(self.hass)
                 ),
                 vol.Optional(
@@ -245,13 +264,16 @@ class MertikOptionsFlow(config_entries.OptionsFlow):
             ):
                 errors[CONF_HYSTERESIS] = "invalid_hysteresis"
             else:
-                return self.async_create_entry(title="", data=user_input)
+                return self.async_create_entry(
+                    title="", data=_sensor_from_form(user_input)
+                )
 
         # Build sensor selector list dynamically from entities on the system
         sensor_options = _temp_sensor_options(self.hass)
         # If previously selected sensor no longer exists, fall back gracefully
+        current_sensor = _sensor_to_form(current_sensor)
         if current_sensor not in sensor_options:
-            current_sensor = DEFAULT_TEMP_SENSOR
+            current_sensor = HANDSET_CHOICE
 
         schema = vol.Schema(
             {

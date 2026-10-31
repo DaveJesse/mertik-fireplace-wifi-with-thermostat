@@ -6,6 +6,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import MertikConfigEntry
+from .const import FLAME_LEVELS
 from .coordinator import MertikDataCoordinator
 from .entity import MertikEntity
 
@@ -70,7 +71,7 @@ class MertikAmbientTemperatureSensorEntity(MertikEntity, SensorEntity):
         self._attr_unique_id = entry_id + "-AmbientTemperature"
 
     @property
-    def native_value(self) -> float:
+    def native_value(self) -> float | None:
         return self._dataservice.ambient_temperature
 
 
@@ -78,7 +79,8 @@ class MertikFaultCodeSensorEntity(MertikEntity, SensorEntity):
     _attr_translation_key = "fault_code"
     _attr_device_class = SensorDeviceClass.ENUM
     _attr_entity_category = EntityCategory.DIAGNOSTIC
-    _attr_options = ["none"] + list(FAULT_CODE_MAP.values())
+    # "off" (shown as "No fault") so that dashboards treat it as inactive.
+    _attr_options = ["off"] + list(FAULT_CODE_MAP.values())
 
     def __init__(
         self, dataservice: MertikDataCoordinator, entry_id: str, device_name: str
@@ -93,19 +95,20 @@ class MertikFaultCodeSensorEntity(MertikEntity, SensorEntity):
 
     @property
     def native_value(self) -> str:
-        return FAULT_CODE_MAP.get(self._dataservice.fault_code, "none")
+        return FAULT_CODE_MAP.get(self._dataservice.fault_code, "off")
 
 
 class MertikFlameHeightSensorEntity(MertikEntity, SensorEntity):
-    """Current flame height step (0 = off, 1 = lowest, 12 = highest).
+    """Flame height in plain words: Off, Pilot, Low or High.
 
-    Read-only: flame height is set by the heating mode. The value is tracked
-    from the commands the integration sends, because the device's status
-    packet does not report it reliably.
+    Read from the burner output the fireplace reports (steps 1-12, see
+    PROTOCOL.md): steps 1-6 show as Low, 7-12 as High. Read-only: the
+    heating mode sets it.
     """
 
     _attr_translation_key = "flame_height"
-    _attr_icon = "mdi:fire"
+    _attr_device_class = SensorDeviceClass.ENUM
+    _attr_options = FLAME_LEVELS
 
     def __init__(
         self, dataservice: MertikDataCoordinator, entry_id: str, device_name: str
@@ -114,5 +117,5 @@ class MertikFlameHeightSensorEntity(MertikEntity, SensorEntity):
         self._attr_unique_id = entry_id + "-FlameHeightLevel"
 
     @property
-    def native_value(self) -> int:
-        return self._dataservice.get_flame_height()
+    def native_value(self) -> str:
+        return self._dataservice.flame_level

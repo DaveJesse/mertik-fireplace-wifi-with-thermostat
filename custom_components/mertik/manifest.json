@@ -7,5 +7,5 @@
   "documentation": "https://github.com/DaveJesse/mertik-fireplace-wifi-with-thermostat",
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/DaveJesse/mertik-fireplace-wifi-with-thermostat/issues",
-  "version": "2.5.2"
+  "version": "2.5.3"
 }

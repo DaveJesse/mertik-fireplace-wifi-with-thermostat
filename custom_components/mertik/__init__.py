@@ -24,7 +24,11 @@ PLATFORMS = ["binary_sensor", "climate", "light", "select", "sensor", "switch"]
 
 # Entities from earlier versions that have been replaced by read-only ones:
 # (domain, unique_id suffix)
-REMOVED_ENTITIES = [("switch", "-AuxOnOff"), ("number", "-FlameHeight")]
+REMOVED_ENTITIES = [
+    ("switch", "-AuxOnOff"),
+    ("number", "-FlameHeight"),
+    ("number", "-LightLevel"),  # unreleased test builds only
+]
 
 type MertikConfigEntry = ConfigEntry[MertikDataCoordinator]
 

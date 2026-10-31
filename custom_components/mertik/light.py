@@ -1,7 +1,10 @@
 """Light entity for Mertik Maxitrol fireplace.
 
-Brightness is tracked locally. On/off follows the light byte in the status
-packet when one arrives, and is otherwise assumed from the last command.
+On/off is reported by the fireplace in every status packet (bit 0x04 of the
+status word), so the entity follows the light however it is switched: HA, the
+handset, the MyFire app, or the fire going out. While the light is on, the
+reported level byte also gives its brightness, so dimming from the MyFire app
+is followed too (to the nearest of the nine levels).
 
 On HA startup the light is shown as off, with its brightness restored from
 the previous session; the next status packet corrects the state if the light
@@ -16,12 +19,12 @@ The fire acts as a trigger for the light in both directions:
   light comes back at the same level.
 The light can always be switched on and off on its own, fire on or off.
 
-The fireplace reports the light in every status packet (on/off), so changes
-made with the handset or the MyFire app are followed too; just after HA sends
-a light command the report is ignored briefly (REPORT_GRACE_SECONDS).
+For a few seconds after HA sends a light command the reported state is
+ignored, so a status packet sent just before the fireplace acts does not flip
+the entity back. The light byte in the status packet is not used: it keeps a
+brightness code after the light is switched off.
 """
 
-import time
 from typing import Any
 
 from homeassistant.components.light import ATTR_BRIGHTNESS, ColorMode, LightEntity
@@ -30,15 +33,13 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
 from . import MertikConfigEntry
+from .const import LEVEL_BRIGHTNESS, level_from_brightness
 from .coordinator import MertikDataCoordinator
 from .entity import MertikEntity
 
 PARALLEL_UPDATES = 1
 
 DEFAULT_BRIGHTNESS = 128
-# After HA sends a light command, ignore the reported light state for this
-# long, so a status packet from before the command cannot undo it.
-REPORT_GRACE_SECONDS = 15.0
 
 
 async def async_setup_entry(
@@ -59,7 +60,6 @@ class MertikLightEntity(MertikEntity, LightEntity, RestoreEntity):
     _attr_translation_key = "light"
     _attr_color_mode = ColorMode.BRIGHTNESS
     _attr_supported_color_modes = {ColorMode.BRIGHTNESS}
-    _attr_assumed_state = True
 
     def __init__(
         self, dataservice: MertikDataCoordinator, entry_id: str, device_name: str
@@ -68,7 +68,6 @@ class MertikLightEntity(MertikEntity, LightEntity, RestoreEntity):
         self._attr_unique_id = entry_id + "-Light"
         self._is_on = False
         self._brightness = DEFAULT_BRIGHTNESS
-        self._last_command = 0.0  # time.monotonic() of our last light command
 
     async def async_added_to_hass(self) -> None:
         """Start as off and restore the last brightness.
@@ -87,7 +86,6 @@ class MertikLightEntity(MertikEntity, LightEntity, RestoreEntity):
 
     async def _restore_light(self) -> None:
         """Send light on at the current brightness (light-with-fire)."""
-        self._last_command = time.monotonic()
         await self.hass.async_add_executor_job(self._dataservice.light_on)
         await self.hass.async_add_executor_job(
             self._dataservice.set_light_brightness, self._brightness
@@ -95,20 +93,26 @@ class MertikLightEntity(MertikEntity, LightEntity, RestoreEntity):
         # _is_on stays True; brightness unchanged
         self.async_write_ha_state()
 
+    async def _refresh_level(self) -> None:
+        await self.hass.async_add_executor_job(
+            self._dataservice.set_light_brightness, self._brightness
+        )
+
     @callback
     def _handle_coordinator_update(self) -> None:
-        """Follow the fireplace's reported light state and the fire."""
+        """Follow the light as reported by the fireplace."""
         reported = self._dataservice.light_reported
-        if (
-            reported is not None
-            and reported != self._is_on
-            and time.monotonic() - self._last_command > REPORT_GRACE_SECONDS
-        ):
-            # Switched by the handset, the MyFire app or the fire itself.
+        if reported is not None:
+            # Switched by HA, the handset or the app, or off with the fire.
             self._is_on = reported
-        if self._dataservice.consume_fire_turned_off():
-            # The device switches the light off with the fire; just reflect it.
-            self._is_on = False
+        level = self._dataservice.light_level_reported
+        if level is not None and level_from_brightness(self._brightness) != level:
+            # Dimmed elsewhere (the MyFire app): follow, to that level's middle.
+            self._brightness = LEVEL_BRIGHTNESS[level - 1]
+        if self._dataservice.consume_light_refresh_due():
+            # The fire has finished shutting down: send HA's brightness so the
+            # fire's level and HA's are back in step (does not switch it on).
+            self.hass.async_create_task(self._refresh_level())
         if self._dataservice.consume_light_on_due():
             # Fire has just been switched on and lit: light on, as the
             # handset does (option "light_with_fire").
@@ -125,10 +129,8 @@ class MertikLightEntity(MertikEntity, LightEntity, RestoreEntity):
         return self._brightness
 
     async def async_turn_on(self, **kwargs: Any) -> None:
-        self._last_command = time.monotonic()
-        # The light state is assumed (restored, never reported by the device),
-        # so always send light_on: the light may be off even if we think it is
-        # on, and a brightness command alone does not switch it on.
+        # Always send light_on: a brightness command alone does not switch
+        # the light on.
         await self.hass.async_add_executor_job(self._dataservice.light_on)
         if ATTR_BRIGHTNESS in kwargs:
             self._brightness = kwargs[ATTR_BRIGHTNESS]
@@ -140,7 +142,6 @@ class MertikLightEntity(MertikEntity, LightEntity, RestoreEntity):
         self._dataservice.async_set_updated_data(None)
 
     async def async_turn_off(self, **kwargs: Any) -> None:
-        self._last_command = time.monotonic()
         self._is_on = False
         self.async_write_ha_state()
         await self.hass.async_add_executor_job(self._dataservice.light_off)
