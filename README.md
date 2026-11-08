@@ -456,9 +456,10 @@ are met. Controls work correctly regardless of whether "APP" is displayed.
 **Description:** The myfire WiFi box is on the network but has lost its radio link to the fireplace receiver. It answers every command with a short error reply instead of a status packet (or with status packets marked as having no receiver link), so nothing reaches the fire. A link that drops for a few seconds while the fire ignites or shuts down is normal and is ignored; F43 is reported only if it lasts 30 seconds.
 
 **Resolution:**
-1. Switch the fireplace's power off for 30 seconds and back on.
-2. If F43 persists in the MyFire app, re-pair the WiFi box with the receiver following the box's instructions (disable the integration while pairing so the app has the box's only connection).
-3. The entities and the Repairs alert recover by themselves once the link is restored.
+1. If the handset's batteries are out, put them back in: the handset's start-up transmission has restored the link (seen with batteries left out for long periods). Operating the fire with the handset may also work.
+2. Otherwise switch the fireplace's power off for 30 seconds and back on.
+3. If F43 persists in the MyFire app, re-pair the WiFi box with the receiver following the box's instructions (disable the integration while pairing so the app has the box's only connection).
+4. The entities and the Repairs alert recover by themselves once the link is restored.
 
 ---
 
@@ -484,6 +485,23 @@ are met. Controls work correctly regardless of whether "APP" is displayed.
 
 **Resolution:**
 This is not a fault. If you want the fire to stay at a fixed output rather than cycling, select **Full Heat**, **Medium Heat**, or **Low Heat** from the Heating Mode entity instead of Thermostatic.
+
+---
+
+### Capturing a debug log
+
+To find out what led up to a problem (an F43, a fire that did not follow HA), turn on debug logging for this integration only, in `configuration.yaml`:
+
+```yaml
+logger:
+  default: warning
+  logs:
+    custom_components.mertik: debug
+```
+
+The fireplace is polled every 10 seconds, but a poll is only logged when something has changed: a new status value, a command and its reply, the first "no receiver" reply of a run, the box going silent or answering again. While nothing changes, a single line is written every 30 minutes, so the log can be left on for days and shows exactly when a fault started. Debug logging can also be turned on from **Settings → Devices & Services → Mertik Maxitrol → ⋮ → Enable debug logging**; turning it off there downloads the log.
+
+Home Assistant's own "Finished fetching Mertik data" line for every poll is hidden too; to see it, also set `custom_components.mertik.coordinator.poll: debug`.
 
 ---
 

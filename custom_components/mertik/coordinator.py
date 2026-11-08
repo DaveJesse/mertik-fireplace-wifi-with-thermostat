@@ -22,6 +22,14 @@ from .const import (
 from .mertik import Mertik
 
 _LOGGER = logging.getLogger(__name__)
+# Home Assistant's DataUpdateCoordinator logs "Finished fetching Mertik data"
+# at debug level on every 10 s poll. It gets a logger of its own, set to info
+# unless configured, so debug logging for custom_components.mertik stays
+# readable. Errors still show. To see every poll, set
+# custom_components.mertik.coordinator.poll to debug.
+_POLL_LOGGER = logging.getLogger(f"{__name__}.poll")
+if _POLL_LOGGER.level == logging.NOTSET:
+    _POLL_LOGGER.setLevel(logging.INFO)
 OPTIMISTIC_ON_SECONDS = 20
 OPTIMISTIC_OFF_SECONDS = 20
 # A fire that has been switched off only counts as relit at the fireplace once
@@ -56,7 +64,7 @@ class MertikDataCoordinator(DataUpdateCoordinator[None]):
     ) -> None:
         super().__init__(
             hass,
-            _LOGGER,
+            _POLL_LOGGER,
             config_entry=entry,
             name="Mertik",
             update_interval=timedelta(seconds=10),

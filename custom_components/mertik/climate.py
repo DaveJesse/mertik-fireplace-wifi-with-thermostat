@@ -169,6 +169,9 @@ class MertikClimateEntity(MertikEntity, ClimateEntity, RestoreEntity):
         # changes so hysteresis knows where it is; cleared when the fire is
         # switched off or Thermostatic is left).
         self._thermo_mode: str | None = None
+        # Last thermostat decision logged: it is evaluated on every 10 s poll
+        # but only logged when the reading, setpoint or decision changes.
+        self._last_thermo_log: tuple | None = None
         # Previous fire on/off state, used to detect switch-on (off -> on) so
         # the setpoint can be reset to the configured default.
         self._was_on: bool | None = None
@@ -403,7 +406,9 @@ class MertikClimateEntity(MertikEntity, ClimateEntity, RestoreEntity):
 
                     self.hass.async_create_task(_do_standby_fault())
             else:
-                _LOGGER.debug("Thermostatic: no temperature reading, skipping")
+                if self._last_thermo_log != ("no reading",):
+                    self._last_thermo_log = ("no reading",)
+                    _LOGGER.debug("Thermostatic: no temperature reading, skipping")
             return
 
         diff = self._target_temp - current
@@ -417,14 +422,22 @@ class MertikClimateEntity(MertikEntity, ClimateEntity, RestoreEntity):
             self._thermo_mode,
         )
 
-        _LOGGER.debug(
-            "Thermostatic: sensor=%s current=%.1fC setpoint=%.1fC diff=%.1fC -> %s",
+        decision = (
             sensor_id,
-            current,
-            self._target_temp,
-            diff,
-            target_mode if target_mode else "Standby",
+            round(current, 1),
+            round(self._target_temp, 1),
+            target_mode or "Standby",
         )
+        if decision != self._last_thermo_log:
+            self._last_thermo_log = decision
+            _LOGGER.debug(
+                "Thermostatic: sensor=%s current=%.1fC setpoint=%.1fC diff=%.1fC -> %s",
+                sensor_id,
+                current,
+                self._target_temp,
+                diff,
+                target_mode if target_mode else "Standby",
+            )
 
         # Fire switched off (and not in thermostatic standby): forget the last
         # mode applied so that the next switch-on re-evaluates and ignites.

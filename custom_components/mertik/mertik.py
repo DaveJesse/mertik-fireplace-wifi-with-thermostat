@@ -33,6 +33,12 @@ SOCKET_TIMEOUT = 3
 # before the next command. Sending a second command while the receiver was
 # still handling the first got a "no receiver" (E1) reply in 12 of 13 cases in
 # captures, and once was followed by a 90-minute loss of the receiver (F43).
+# Debug logging of the 10 s status poll: a poll is only logged when something
+# has changed (status values, "no receiver" starting or ending, the box going
+# silent or answering again), so debug logging can be left on for days. Commands
+# are always logged in full. While nothing changes, a one-line note is logged at
+# least this often to show that polling (and logging) is still running.
+QUIET_NOTE_SECONDS = 1800.0
 ACK_PREFIX = "3030303000"
 ACK_TIMEOUT_SECONDS = 3.0
 COMMAND_GAP_SECONDS = 2.0
@@ -209,6 +215,16 @@ class Mertik:
         self._last_command_done = 0.0
         # One exchange with the box at a time.
         self._io_lock = threading.RLock()
+        # Debug logging of status polls (see _begin_poll / _end_poll): lines
+        # from a poll are held and only written if the poll was notable.
+        self._poll_quiet = False
+        self._poll_notable = False
+        self._held_log: list[tuple[str, tuple]] = []
+        self._last_status_key: str | None = None
+        self._e1_replies = 0  # "no receiver" replies in a row
+        self._silent_polls = 0  # polls in a row with no answer from the box
+        self._quiet_polls = 0  # polls not logged since the last log line
+        self._last_poll_note = time.monotonic()
         # Number of usable status packets processed (lets callers tell
         # whether a status has arrived since some event).
         self.status_count = 0
@@ -497,7 +513,87 @@ class Mertik:
     def _send_command(self, msg: str) -> None:
         """Send a command and consume its response(s), one exchange at a time."""
         with self._io_lock:
-            self._send_command_locked(msg)
+            is_poll = msg == CMD_STATUS
+            if is_poll:
+                self._begin_poll()
+            try:
+                self._send_command_locked(msg)
+            finally:
+                if is_poll:
+                    self._end_poll()
+
+    # ---- Debug logging that stays quiet while nothing changes ----------
+
+    def _detail(self, msg: str, *args) -> None:
+        """Debug-log a line; during a status poll, hold it until _end_poll."""
+        if self._poll_quiet:
+            self._held_log.append((msg, args))
+        else:
+            _LOGGER.debug(msg, *args)
+
+    def _notable(self) -> None:
+        """Mark the current status poll as worth logging."""
+        self._poll_notable = True
+
+    def _begin_poll(self) -> None:
+        self._poll_quiet = _LOGGER.isEnabledFor(logging.DEBUG)
+        self._poll_notable = False
+        self._held_log = []
+
+    def _end_poll(self) -> None:
+        """Write the poll's held lines if it was notable, else just count it."""
+        if not self._poll_quiet:
+            return
+        self._poll_quiet = False
+        held, self._held_log = self._held_log, []
+        now = time.monotonic()
+        if self._poll_notable:
+            if self._quiet_polls:
+                _LOGGER.debug(
+                    "(%d status polls with nothing new not logged)", self._quiet_polls
+                )
+            for msg, args in held:
+                _LOGGER.debug(msg, *args)
+            self._quiet_polls = 0
+            self._last_poll_note = now
+            return
+        self._quiet_polls += 1
+        if now - self._last_poll_note >= QUIET_NOTE_SECONDS:
+            if self._e1_replies:
+                _LOGGER.debug(
+                    "Still 'no receiver': %d replies in a row", self._e1_replies
+                )
+            elif self._silent_polls:
+                _LOGGER.debug(
+                    "Box still not answering: %d polls in a row", self._silent_polls
+                )
+            else:
+                _LOGGER.debug(
+                    "No change in the last %d status polls", self._quiet_polls
+                )
+            self._quiet_polls = 0
+            self._last_poll_note = now
+
+    def _answered(self) -> None:
+        """A status or acknowledgement arrived: end a run of failed exchanges.
+
+        "No receiver" replies do not count: during a loss of the receiver
+        link they alternate with timeouts, and the run should stay one run.
+        """
+        if self._silent_polls:
+            self._notable()
+            self._detail(
+                "Box answering again after %d exchanges without a status",
+                self._silent_polls,
+            )
+            self._silent_polls = 0
+
+    def _no_answer(self, msg: str, *args) -> None:
+        """Log a failed exchange; during polls only the first of a run."""
+        if self._silent_polls == 0:
+            self._notable()
+        self._silent_polls += 1
+        self._detail(msg, *args)
 
     def _send_command_locked(self, msg: str) -> None:
         """Connect, send one command, read its reply, close.
@@ -519,14 +615,14 @@ class Mertik:
         try:
             sock = self._open()
         except OSError as err:
-            _LOGGER.debug("Cannot connect to %s: %s", self.ip, err)
+            self._no_answer("Cannot connect to %s: %s", self.ip, err)
             self._command_finished(is_command)
             return
         try:
             sock.sendall(payload)
             self._read_replies(sock, msg, is_command)
         except OSError as err:
-            _LOGGER.debug("Exchange with %s failed (%s): %s", self.ip, msg, err)
+            self._no_answer("Exchange with %s failed (%s): %s", self.ip, msg, err)
         finally:
             try:
                 sock.close()
@@ -578,9 +674,11 @@ class Mertik:
         if pending:
             self._handle_reply(pending)  # unframed remainder (fallback parse)
         if not text:
-            _LOGGER.debug("No response to command %s (timeout)", msg)
-        elif is_command:
+            self._no_answer("No response to command %s (timeout)", msg)
+            return
+        if is_command:
             if wanted in text:
+                self._answered()
                 _LOGGER.debug("Command %s acknowledged", msg)
             else:
                 _LOGGER.debug(
@@ -589,7 +687,7 @@ class Mertik:
 
     def _handle_reply(self, data: bytes) -> None:
         self._last_reply = time.monotonic()
-        _LOGGER.debug("RAW RESPONSE hex=%s", data.hex())
+        self._detail("RAW RESPONSE hex=%s", data.hex())
         self._parse_any_status(data)
 
     def _command_finished(self, is_command: bool) -> None:
@@ -608,8 +706,10 @@ class Mertik:
         for pkt in packets:
             if pkt.startswith(LIGHT_ON_MSG):
                 self._light_event = True
+                self._notable()
             elif pkt.startswith(LIGHT_OFF_MSG):
                 self._light_event = False
+                self._notable()
         statuses = [
             pkt
             for pkt in packets
@@ -626,19 +726,39 @@ class Mertik:
             if self.receiver_lost:
                 _LOGGER.info("Fireplace receiver link restored")
             self._no_receiver_since = None
+            self._answered()
+            if self._e1_replies:
+                self._notable()
+                self._detail(
+                    "Status received again after %d 'no receiver' replies",
+                    self._e1_replies,
+                )
+                self._e1_replies = 0
             self._process_status(statuses[-1])
             return
         if RECEIVER_LOST_PREFIX in text:
-            _LOGGER.debug("WiFi box replied 'no receiver' (E1): %s", data.hex())
+            if self._e1_replies == 0:
+                self._notable()
+            self._e1_replies += 1
+            self._detail("WiFi box replied 'no receiver' (E1): %s", data.hex())
             if self._no_receiver_since is None:
                 self._no_receiver_since = time.monotonic()
             return
-        _LOGGER.debug("Response contains no status packet: %s", data.hex())
+        self._notable()
+        self._detail("Response contains no status packet: %s", data.hex())
 
     def _process_status(self, status_str: str) -> None:
-        _LOGGER.debug("STATUS PACKET (len=%d): %s", len(status_str), status_str)
+        self._detail("STATUS PACKET (len=%d): %s", len(status_str), status_str)
         if len(status_str) < MIN_STATUS_LEN:
+            self._notable()
             return
+        # Log the poll only if a field we read has changed. The characters
+        # after the set temperature (name, padding, a counter-like value that
+        # flickers between polls) are left out of the comparison.
+        key = status_str[12:MIN_STATUS_LEN]
+        if key != self._last_status_key:
+            self._last_status_key = key
+            self._notable()
         try:
             output = int(status_str[STATUS_BURNER_OUTPUT], 16)
             word = int(status_str[STATUS_WORD], 16)
@@ -649,7 +769,7 @@ class Mertik:
         # igniting and shutting down) carry unreliable values: keep the last
         # good ones. Accepted only until a linked frame has been seen.
         if not word & WORD_RECEIVER_LINK and self._link_seen:
-            _LOGGER.debug("Receiver link bit clear: status values not used")
+            self._detail("Receiver link bit clear: status values not used")
             if self._unlinked_since is None:
                 self._unlinked_since = time.monotonic()
             return
@@ -725,7 +845,7 @@ class Mertik:
         except ValueError:
             pass
 
-        _LOGGER.debug(
+        self._detail(
             "Status: output=%d word=%04X mode=%s flags=%s room=%s set=%s",
             output,
             word,
