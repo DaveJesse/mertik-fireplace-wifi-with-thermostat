@@ -102,10 +102,6 @@ class MertikDataCoordinator(DataUpdateCoordinator[None]):
         # (mode, check due at, times sent) -- see _mode_check_due.
         self._mode_check: tuple[str, datetime, int] | None = None
         self._retrying = False
-        # Shutdown (mertik.last_shutdown_at) for which the light level has
-        # been re-sent, and whether a re-send is waiting for the light entity.
-        self._light_refreshed_for: float | None = None
-        self.light_refresh_due = False
         # Set when the fire is switched on while already lit in Thermostatic:
         # the thermostat forgets its last mode and re-sends what is needed.
         self.thermo_recheck = False
@@ -445,11 +441,6 @@ class MertikDataCoordinator(DataUpdateCoordinator[None]):
         off, self.fire_just_turned_off = self.fire_just_turned_off, False
         return off
 
-    def consume_light_refresh_due(self) -> bool:
-        """True once after each completed shutdown (see _async_update_data)."""
-        due, self.light_refresh_due = self.light_refresh_due, False
-        return due
-
     def consume_light_on_due(self) -> bool:
         """Return True once when the light should come on with the fire."""
         due, self.light_on_due = self.light_on_due, False
@@ -782,19 +773,6 @@ class MertikDataCoordinator(DataUpdateCoordinator[None]):
                 )
             else:
                 ir.async_delete_issue(self.hass, DOMAIN, silent_id)
-            # After a shutdown has completed, re-send the light level so the
-            # fire's stored brightness matches HA's (it does not switch the
-            # light on).
-            shutdown_at = self.mertik.last_shutdown_at
-            out_for = self.mertik.out_after_shutdown_seconds
-            if (
-                shutdown_at is not None
-                and shutdown_at != self._light_refreshed_for
-                and out_for is not None
-                and out_for >= OUT_BEFORE_IGNITION_SECONDS
-            ):
-                self._light_refreshed_for = shutdown_at
-                self.light_refresh_due = True
             # Light-with-fire: once a flame (pilot or burner) is seen after the
             # user switched the fire on, ask the light entity to switch on.
             if self._light_with_next_flame and (

@@ -93,11 +93,6 @@ class MertikLightEntity(MertikEntity, LightEntity, RestoreEntity):
         # _is_on stays True; brightness unchanged
         self.async_write_ha_state()
 
-    async def _refresh_level(self) -> None:
-        await self.hass.async_add_executor_job(
-            self._dataservice.set_light_brightness, self._brightness
-        )
-
     @callback
     def _handle_coordinator_update(self) -> None:
         """Follow the light as reported by the fireplace."""
@@ -109,10 +104,6 @@ class MertikLightEntity(MertikEntity, LightEntity, RestoreEntity):
         if level is not None and level_from_brightness(self._brightness) != level:
             # Dimmed elsewhere (the MyFire app): follow, to that level's middle.
             self._brightness = LEVEL_BRIGHTNESS[level - 1]
-        if self._dataservice.consume_light_refresh_due():
-            # The fire has finished shutting down: send HA's brightness so the
-            # fire's level and HA's are back in step (does not switch it on).
-            self.hass.async_create_task(self._refresh_level())
         if self._dataservice.consume_light_on_due():
             # Fire has just been switched on and lit: light on, as the
             # handset does (option "light_with_fire").
@@ -129,14 +120,17 @@ class MertikLightEntity(MertikEntity, LightEntity, RestoreEntity):
         return self._brightness
 
     async def async_turn_on(self, **kwargs: Any) -> None:
-        # Always send light_on: a brightness command alone does not switch
-        # the light on.
+        # Always light_on, then the brightness: the fire may hold a different
+        # level (set by the app, or reset at shutdown), and sending it here
+        # keeps HA's and the fire's in step. A brightness command must never
+        # be sent to a light that is off: it switches the light on (seen
+        # 9 Nov 2026, when a level re-send after shutdown lit the light).
         await self.hass.async_add_executor_job(self._dataservice.light_on)
         if ATTR_BRIGHTNESS in kwargs:
             self._brightness = kwargs[ATTR_BRIGHTNESS]
-            await self.hass.async_add_executor_job(
-                self._dataservice.set_light_brightness, self._brightness
-            )
+        await self.hass.async_add_executor_job(
+            self._dataservice.set_light_brightness, self._brightness
+        )
         self._is_on = True
         self.async_write_ha_state()
         self._dataservice.async_set_updated_data(None)
