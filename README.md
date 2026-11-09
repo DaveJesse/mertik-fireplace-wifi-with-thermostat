@@ -499,7 +499,7 @@ logger:
     custom_components.mertik: debug
 ```
 
-The fireplace is polled every 10 seconds, but a poll is only logged when something has changed: a new status value, a command and its reply, the first "no receiver" reply of a run, the box going silent or answering again. While nothing changes, a single line is written every 30 minutes, so the log can be left on for days and shows exactly when a fault started. Debug logging can also be turned on from **Settings → Devices & Services → Mertik Maxitrol → ⋮ → Enable debug logging**; turning it off there downloads the log.
+The fireplace is polled every 10 seconds, but a poll is only logged when something has changed: a new status value, a command and its reply, the first "no receiver" reply of a run, the box going silent or answering again. The thermostat's decision is logged when it changes (for example Full Heat to Medium Heat), not as the room temperature drifts. While nothing changes, a single line is written every 30 minutes, so the log can be left on for days and shows exactly when a fault started. Debug logging can also be turned on from **Settings → Devices & Services → Mertik Maxitrol → ⋮ → Enable debug logging**; turning it off there downloads the log.
 
 Home Assistant's own "Finished fetching Mertik data" line for every poll is hidden too; to see it, also set `custom_components.mertik.coordinator.poll: debug`.
 

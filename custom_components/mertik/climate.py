@@ -170,7 +170,7 @@ class MertikClimateEntity(MertikEntity, ClimateEntity, RestoreEntity):
         # switched off or Thermostatic is left).
         self._thermo_mode: str | None = None
         # Last thermostat decision logged: it is evaluated on every 10 s poll
-        # but only logged when the reading, setpoint or decision changes.
+        # but only logged when the decision, setpoint or sensor changes.
         self._last_thermo_log: tuple | None = None
         # Previous fire on/off state, used to detect switch-on (off -> on) so
         # the setpoint can be reset to the configured default.
@@ -422,21 +422,26 @@ class MertikClimateEntity(MertikEntity, ClimateEntity, RestoreEntity):
             self._thermo_mode,
         )
 
+        # Logged only when the decision changes (or the sensor, the setpoint,
+        # or whether the fire is on); the room temperature drifting by tenths
+        # of a degree is not logged.
+        fire_active = self._dataservice.is_on or self._dataservice._in_standby
         decision = (
             sensor_id,
-            round(current, 1),
             round(self._target_temp, 1),
             target_mode or "Standby",
+            fire_active,
         )
         if decision != self._last_thermo_log:
             self._last_thermo_log = decision
             _LOGGER.debug(
-                "Thermostatic: sensor=%s current=%.1fC setpoint=%.1fC diff=%.1fC -> %s",
+                "Thermostatic: sensor=%s current=%.1fC setpoint=%.1fC diff=%.1fC -> %s%s",
                 sensor_id,
                 current,
                 self._target_temp,
                 diff,
                 target_mode if target_mode else "Standby",
+                "" if fire_active else " (fire is off: not applied)",
             )
 
         # Fire switched off (and not in thermostatic standby): forget the last
