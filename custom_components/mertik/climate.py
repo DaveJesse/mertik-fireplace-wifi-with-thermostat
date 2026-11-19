@@ -50,6 +50,13 @@ _LOGGER = logging.getLogger(__name__)
 MIN_TEMP = MIN_TARGET_TEMP
 MAX_TEMP_C = MAX_TARGET_TEMP
 
+# Home Assistant 2026.11 renamed the climate temperature members to native_*
+# (native_temperature_unit, native_current_temperature,
+# native_target_temperature). The old names still work there, with a warning
+# at startup, until 2027.11; releases before 2026.11 know only the old names.
+# The entity provides whichever set this Home Assistant uses.
+_NATIVE_TEMPERATURES = hasattr(ClimateEntity, "native_current_temperature")
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -136,7 +143,10 @@ class MertikClimateEntity(MertikEntity, ClimateEntity, RestoreEntity):
     """
 
     _attr_translation_key = "thermostat"
-    _attr_temperature_unit = UnitOfTemperature.CELSIUS
+    if _NATIVE_TEMPERATURES:
+        _attr_native_temperature_unit = UnitOfTemperature.CELSIUS
+    else:
+        _attr_temperature_unit = UnitOfTemperature.CELSIUS
     _attr_min_temp = MIN_TEMP
     _attr_max_temp = MAX_TEMP_C
     _attr_hvac_modes = [HVACMode.OFF, HVACMode.HEAT]
@@ -258,15 +268,29 @@ class MertikClimateEntity(MertikEntity, ClimateEntity, RestoreEntity):
 
     # ---- State properties -----------------------------------------------
 
-    @property
-    def current_temperature(self) -> float | None:
-        """Return current temperature from sensor or device handset."""
-        return self._get_current_temperature()
+    if _NATIVE_TEMPERATURES:
 
-    @property
-    def target_temperature(self) -> float:
-        """Return the current setpoint temperature."""
-        return self._target_temp
+        @property
+        def native_current_temperature(self) -> float | None:
+            """Return current temperature from sensor or device handset."""
+            return self._get_current_temperature()
+
+        @property
+        def native_target_temperature(self) -> float:
+            """Return the current setpoint temperature."""
+            return self._target_temp
+
+    else:
+
+        @property
+        def current_temperature(self) -> float | None:
+            """Return current temperature from sensor or device handset."""
+            return self._get_current_temperature()
+
+        @property
+        def target_temperature(self) -> float:
+            """Return the current setpoint temperature."""
+            return self._target_temp
 
     @property
     def hvac_mode(self) -> HVACMode:
