@@ -62,6 +62,57 @@ CMD_BRIGHTNESS_SUFFIX = "03"
 CMD_THERMOSTAT_PREFIX = "4231"
 CMD_THERMOSTAT_SUFFIX = "03"
 
+# Readable names for the warning logged when the receiver link is lost.
+_COMMAND_NAMES = {
+    CMD_APP_MODE: "app mode",
+    CMD_STANDBY: "standby",
+    CMD_IGNITE: "ignite",
+    CMD_GUARD_FLAME_OFF: "fire off",
+    CMD_AUX_ON: "aux burner on",
+    CMD_AUX_OFF: "aux burner off",
+    CMD_LIGHT_ON: "light on",
+    CMD_LIGHT_OFF: "light off",
+    CMD_SET_ECO: "eco mode",
+    CMD_SET_MANUAL: "manual mode",
+}
+_COMMAND_PREFIX_NAMES = (
+    (CMD_BRIGHTNESS_PREFIX, "light brightness"),
+    (CMD_THERMOSTAT_PREFIX, "thermostat setpoint"),
+    (CMD_FLAME_PREFIX, "flame height"),
+)
+
+
+def _command_name(msg: str) -> str:
+    """A readable name for a command, for log messages."""
+    if msg in _COMMAND_NAMES:
+        return _COMMAND_NAMES[msg]
+    for prefix, name in _COMMAND_PREFIX_NAMES:
+        if msg.startswith(prefix):
+            return name
+    return msg
+
+
+def _clock(wall: float | None) -> str:
+    """Time of day for a time.time() value, in HA's time zone if available."""
+    if wall is None:
+        return "not since start-up"
+    try:
+        from homeassistant.util import dt as dt_util
+
+        return dt_util.as_local(dt_util.utc_from_timestamp(wall)).strftime("%H:%M:%S")
+    except ImportError:  # outside Home Assistant (tests)
+        return time.strftime("%H:%M:%S", time.localtime(wall))
+
+
+def _duration(seconds: float) -> str:
+    minutes, secs = divmod(int(seconds), 60)
+    hours, minutes = divmod(minutes, 60)
+    if hours:
+        return f"{hours}h {minutes:02d}m"
+    if minutes:
+        return f"{minutes}m {secs:02d}s"
+    return f"{secs}s"
+
 # Light levels sent with the brightness command, as ASCII hex: "77" ... "FB".
 # Measured on a Gazco fire: 66 and below leave the light dark, 77 is very dim,
 # and above CC the change is hard to see.
@@ -225,6 +276,12 @@ class Mertik:
         self._silent_polls = 0  # polls in a row with no answer from the box
         self._quiet_polls = 0  # polls not logged since the last log line
         self._last_poll_note = time.monotonic()
+        # Link watch (see _watch_link): logged as warnings whatever the log
+        # level, so the start and end of every outage are on record.
+        self._last_good_status_wall: float | None = None  # time.time()
+        self._last_command: tuple[str, float] | None = None  # (msg, time.time())
+        self._link_down: str | None = None  # which outage is being reported
+        self._link_down_wall: float | None = None
         # Number of usable status packets processed (lets callers tell
         # whether a status has arrived since some event).
         self.status_count = 0
@@ -516,11 +573,75 @@ class Mertik:
             is_poll = msg == CMD_STATUS
             if is_poll:
                 self._begin_poll()
+            if not is_poll:
+                self._last_command = (msg, time.time())
             try:
                 self._send_command_locked(msg)
             finally:
                 if is_poll:
                     self._end_poll()
+                self._watch_link()
+
+    # ---- Outage warnings, independent of the log level ------------------
+
+    def _watch_link(self) -> None:
+        """Log a warning when the link to the fire is lost, and when it is back.
+
+        Two outages are told apart: the WiFi box not answering at all, and the
+        box answering but without a link to the fireplace's receiver (F43).
+        Each is logged once when it starts (after the same 30 s that raise the
+        Repairs alert) and once when it ends, so an outage is on record even
+        with debug logging off.
+        """
+        if self.not_responding:
+            down = "box"
+        elif self.receiver_lost:
+            down = "receiver"
+        else:
+            down = None
+        if down == self._link_down:
+            return
+        now = time.time()
+        if self._link_down is not None:
+            what = (
+                "WiFi box answering again"
+                if self._link_down == "box"
+                else "Fireplace receiver link restored"
+            )
+            lasted = now - (self._link_down_wall or now)
+            _LOGGER.warning(
+                "%s after %s (lost at %s)",
+                what,
+                _duration(lasted),
+                _clock(self._link_down_wall),
+            )
+        self._link_down = down
+        self._link_down_wall = None
+        if down is None:
+            return
+        # When it started: the first failure, not the moment it was confirmed.
+        if down == "box":
+            first = now - (time.monotonic() - self._last_reply)
+            what = "WiFi box not answering"
+        else:
+            since = min(
+                t for t in (self._no_receiver_since, self._unlinked_since) if t is not None
+            )
+            first = now - (time.monotonic() - since)
+            what = "Fireplace receiver link lost (F43)"
+        self._link_down_wall = first
+        if self._last_command is not None:
+            cmd, at = self._last_command
+            last_cmd = f"{_command_name(cmd)} at {_clock(at)}"
+        else:
+            last_cmd = "none since start-up"
+        _LOGGER.warning(
+            "%s since %s. Last good status %s; last command %s",
+            what,
+            _clock(first),
+            _clock(self._last_good_status_wall),
+            last_cmd,
+        )
 
     # ---- Debug logging that stays quiet while nothing changes ----------
 
@@ -561,11 +682,12 @@ class Mertik:
         if now - self._last_poll_note >= QUIET_NOTE_SECONDS:
             if self._e1_replies:
                 _LOGGER.debug(
-                    "Still 'no receiver': %d replies in a row", self._e1_replies
+                    "Still no link to the receiver (F43) since %s",
+                    _clock(self._link_down_wall),
                 )
             elif self._silent_polls:
                 _LOGGER.debug(
-                    "Box still not answering: %d polls in a row", self._silent_polls
+                    "Box still not answering since %s", _clock(self._link_down_wall)
                 )
             else:
                 _LOGGER.debug(
@@ -723,8 +845,6 @@ class Mertik:
                     statuses = [text[idx:]]
                     break
         if statuses:
-            if self.receiver_lost:
-                _LOGGER.info("Fireplace receiver link restored")
             self._no_receiver_since = None
             self._answered()
             if self._e1_replies:
@@ -775,11 +895,10 @@ class Mertik:
             return
         if word & WORD_RECEIVER_LINK:
             self._link_seen = True
-            if self._unlinked_since is not None and self.receiver_lost:
-                _LOGGER.info("Fireplace receiver link restored")
             self._unlinked_since = None
 
         self.status_count += 1
+        self._last_good_status_wall = time.time()
         self._last_status_at = time.monotonic()
         self._aux_bit = bool(word & WORD_AUX)
         try:

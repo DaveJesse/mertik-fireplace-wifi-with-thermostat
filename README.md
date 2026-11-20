@@ -488,6 +488,17 @@ This is not a fault. If you want the fire to stay at a fixed output rather than 
 
 ---
 
+### Outages are always logged
+
+Whatever the log level, the integration writes a warning when it loses the fireplace and another when it gets it back, for example:
+
+```
+Fireplace receiver link lost (F43) since 18:04:12. Last good status 18:04:02; last command light on at 18:04:12
+Fireplace receiver link restored after 22m 03s (lost at 18:04:12)
+```
+
+The same pair is logged if the WiFi box stops answering altogether. They appear in **Settings → System → Logs** without any set-up.
+
 ### Capturing a debug log
 
 To find out what led up to a problem (an F43, a fire that did not follow HA), turn on debug logging for this integration only, in `configuration.yaml`:
@@ -499,7 +510,7 @@ logger:
     custom_components.mertik: debug
 ```
 
-The fireplace is polled every 10 seconds, but a poll is only logged when something has changed: a new status value, a command and its reply, the first "no receiver" reply of a run, the box going silent or answering again. The thermostat's decision is logged when it changes (for example Full Heat to Medium Heat), not as the room temperature drifts. While nothing changes, a single line is written every 30 minutes, so the log can be left on for days and shows exactly when a fault started. Debug logging can also be turned on from **Settings → Devices & Services → Mertik Maxitrol → ⋮ → Enable debug logging**; turning it off there downloads the log.
+The fireplace is polled every 10 seconds, but a poll is only logged when something has changed: a new status value, a command and its reply, the first "no receiver" reply of a run, the box going silent or answering again. The thermostat's decision is logged when it changes (for example Full Heat to Medium Heat), not as the room temperature drifts. While nothing changes, a single line is written every 30 minutes, so the log can be left on for days and shows exactly when a fault started. Debug logging can also be turned on from **Settings → Devices & Services → Mertik Maxitrol → ⋮ → Enable debug logging**; turning it off there downloads the log. Debug logging turned on that way is switched off again when Home Assistant restarts, so for logging that stays on use `configuration.yaml`.
 
 Home Assistant's own "Finished fetching Mertik data" line for every poll is hidden too; to see it, also set `custom_components.mertik.coordinator.poll: debug`.
 
