@@ -1,6 +1,7 @@
 """Mertik Maxitrol fireplace integration."""
 
 import logging
+import os
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST
@@ -17,6 +18,21 @@ from .coordinator import MertikDataCoordinator
 from .mertik import Mertik
 
 _LOGGER = logging.getLogger(__name__)
+
+# A ZIP unpacked inside the existing folder leaves a second copy at
+# custom_components/mertik/mertik/. Python then takes the protocol code from
+# that copy and everything else from the old files (seen 20 Nov 2026), which
+# runs but mixes versions. Say so, from whichever copy notices.
+_HERE = os.path.dirname(os.path.abspath(__file__))
+if __name__ != "custom_components.mertik" or os.path.isfile(
+    os.path.join(_HERE, "mertik", "manifest.json")
+):
+    _LOGGER.error(
+        "Mertik is installed twice: a copy is inside %s. Delete the whole "
+        "custom_components/mertik folder, unzip the release into "
+        "custom_components (not into custom_components/mertik) and restart",
+        _HERE if __name__ == "custom_components.mertik" else os.path.dirname(_HERE),
+    )
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 

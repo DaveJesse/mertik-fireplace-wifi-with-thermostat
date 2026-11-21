@@ -786,6 +786,17 @@ class MertikDataCoordinator(DataUpdateCoordinator[None]):
             self.fire_just_turned_off = self._prev_is_on and not current_on
             self._prev_is_on = current_on
         except Exception as err:
+            # Say what actually failed: UpdateFailed alone logs only "Error
+            # communicating with the fireplace". A network error is expected
+            # now and then; anything else is a fault, so log its traceback
+            # (20 Nov: an ImportError from a mis-installed copy showed up
+            # only as a communication error).
+            _LOGGER.warning(
+                "Update failed: %s: %s",
+                type(err).__name__,
+                err,
+                exc_info=not isinstance(err, OSError),
+            )
             ir.async_create_issue(
                 self.hass,
                 DOMAIN,
